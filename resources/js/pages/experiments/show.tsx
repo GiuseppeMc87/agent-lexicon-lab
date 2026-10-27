@@ -1,21 +1,28 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import {
+    ArrowDown,
     ArrowLeft,
     BookOpenText,
     Clock3,
     History,
     MessageSquareText,
     Play,
-    RefreshCw,
     TriangleAlert,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ExperimentUpdateController from '@/actions/App/Http/Controllers/ExperimentUpdateController';
 import RunExperimentController from '@/actions/App/Http/Controllers/RunExperimentController';
 import { index } from '@/actions/App/Http/Controllers/ExperimentController';
 import { ExperimentStatusBadge } from '@/components/experiment-status-badge';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import type {
     Experiment,
     ExperimentMessage,
@@ -45,6 +52,179 @@ type UpdatePayload = {
     cursor: Cursor;
 };
 
+const MIN_REPLY_REVEAL_DELAY_MS = 800;
+const MAX_REPLY_REVEAL_DELAY_MS = 12_000;
+const DEFAULT_REPLY_REVEAL_DELAY_MS = 1_200;
+
+function formatTime(value: string): string {
+    return new Date(value).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+}
+
+function ComposingIndicator({ role }: { role: ExperimentMessage['role'] }) {
+    const isSender = role === 'sender';
+
+    return (
+        <div
+            className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}
+            role="status"
+            aria-live="polite"
+        >
+            <div
+                className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm text-muted-foreground shadow-sm ${
+                    isSender
+                        ? 'rounded-tr-md bg-background'
+                        : 'rounded-tl-md bg-muted/45'
+                }`}
+            >
+                <span
+                    className={`flex size-7 items-center justify-center rounded-full text-xs font-bold ${
+                        isSender
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground'
+                    }`}
+                >
+                    {isSender ? 'S' : 'R'}
+                </span>
+                <span className="capitalize">{role} is composing</span>
+                <span className="flex items-center gap-1" aria-hidden="true">
+                    <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-current" />
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function VocabularyList({ vocabulary }: { vocabulary: VocabularyEntry[] }) {
+    if (vocabulary.length === 0) {
+        return (
+            <div className="rounded-xl border border-dashed p-6 text-center">
+                <BookOpenText
+                    className="mx-auto size-7 text-muted-foreground/50"
+                    aria-hidden="true"
+                />
+                <p className="mt-3 text-sm font-medium">No vocabulary yet</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    New symbols will appear here as soon as either agent defines
+                    them.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <dl className="flex flex-col gap-3">
+            {vocabulary.map((entry) => (
+                <div
+                    key={entry.id}
+                    className="rounded-xl border bg-background p-3.5"
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <dt className="font-mono text-sm font-semibold break-all">
+                            {`[[${entry.symbol}]]`}
+                        </dt>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            v{entry.current?.version ?? 0}
+                        </span>
+                    </div>
+                    <dd className="mt-2 text-sm leading-5">
+                        {entry.current?.meaning}
+                    </dd>
+                    {entry.current?.description && (
+                        <dd className="mt-1.5 text-xs leading-5 text-muted-foreground">
+                            {entry.current.description}
+                        </dd>
+                    )}
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+function MessageDetailDialog({
+    message,
+    onOpenChange,
+}: {
+    message: ExperimentMessage | null;
+    onOpenChange: (open: boolean) => void;
+}) {
+    return (
+        <Dialog open={message !== null} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
+                {message && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle className="capitalize">
+                                Turn {message.turn} · {message.role}
+                            </DialogTitle>
+                            <DialogDescription>
+                                Created at {formatTime(message.created_at)} ·{' '}
+                                {message.vocabulary.length}{' '}
+                                {message.vocabulary.length === 1
+                                    ? 'symbol attached'
+                                    : 'symbols attached'}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <section className="rounded-xl border bg-muted/35 p-4">
+                                <h3 className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                                    Symbolic message
+                                </h3>
+                                <p className="mt-3 font-mono text-sm leading-6 break-words whitespace-pre-wrap">
+                                    {message.symbolic_content}
+                                </p>
+                            </section>
+                            <section className="rounded-xl border p-4">
+                                <h3 className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                                    Decoded meaning
+                                </h3>
+                                <p className="mt-3 text-sm leading-6 break-words whitespace-pre-wrap">
+                                    {message.decoded_content}
+                                </p>
+                            </section>
+                        </div>
+
+                        <section>
+                            <h3 className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                                Vocabulary attached to this message
+                            </h3>
+                            {message.vocabulary.length === 0 ? (
+                                <p className="mt-3 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+                                    This message did not create or revise a
+                                    symbol.
+                                </p>
+                            ) : (
+                                <div className="mt-3 overflow-hidden rounded-xl border">
+                                    {message.vocabulary.map((item) => (
+                                        <div
+                                            key={`${item.symbol}-${item.version}`}
+                                            className="grid gap-1 border-b p-3 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)]"
+                                        >
+                                            <p className="font-mono text-sm font-semibold">
+                                                {`[[${item.symbol}]]`} v
+                                                {item.version}
+                                            </p>
+                                            <p className="text-sm leading-5 text-muted-foreground">
+                                                {item.meaning}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function ExperimentShow({
     experiment,
     messages,
@@ -58,27 +238,132 @@ export default function ExperimentShow({
     const [currentVocabulary, setCurrentVocabulary] = useState(vocabulary);
     const [currentEvents, setCurrentEvents] = useState(events);
     const [currentCursor, setCurrentCursor] = useState(cursor);
+    const [pendingMessages, setPendingMessages] = useState<ExperimentMessage[]>(
+        [],
+    );
     const [pollingError, setPollingError] = useState<string | null>(null);
-    const [isPolling, setIsPolling] = useState(false);
+    const [runRequested, setRunRequested] = useState(false);
+    const [runSubmissionSucceeded, setRunSubmissionSucceeded] = useState(false);
+    const [selectedMessage, setSelectedMessage] =
+        useState<ExperimentMessage | null>(null);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [vocabularyOpen, setVocabularyOpen] = useState(false);
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+    const conversationRef = useRef<HTMLDivElement>(null);
+    const shouldFollowLatestRef = useRef(true);
+    const runRequestedRef = useRef(false);
+    const knownMessageIdsRef = useRef(
+        new Set(messages.map((message) => message.id)),
+    );
+    const turnWaitStartedAtRef = useRef(Date.now());
+    const replyDelayByTurnRef = useRef(new Map<number, number>());
 
+    useEffect(() => {
+        setCurrentExperiment(experiment);
+        setCurrentVocabulary(vocabulary);
+        setCurrentEvents(events);
+        setSelectedMessage(null);
+        shouldFollowLatestRef.current = true;
+
+        if (!runRequestedRef.current) {
+            setCurrentMessages(messages);
+            setPendingMessages([]);
+            setCurrentCursor(cursor);
+            knownMessageIdsRef.current = new Set(
+                messages.map((message) => message.id),
+            );
+            turnWaitStartedAtRef.current = Date.now();
+            replyDelayByTurnRef.current.clear();
+        }
+    }, [cursor, events, experiment, messages, vocabulary]);
+
+    const nextPendingMessage = pendingMessages[0] ?? null;
+
+    useEffect(() => {
+        if (nextPendingMessage === null) {
+            return;
+        }
+
+        const revealDelay =
+            nextPendingMessage.role === 'receiver'
+                ? (replyDelayByTurnRef.current.get(nextPendingMessage.turn) ??
+                  DEFAULT_REPLY_REVEAL_DELAY_MS)
+                : 0;
+
+        const timer = window.setTimeout(() => {
+            setCurrentMessages((existing) => {
+                if (
+                    existing.some(
+                        (message) => message.id === nextPendingMessage.id,
+                    )
+                ) {
+                    return existing;
+                }
+
+                return [...existing, nextPendingMessage].sort(
+                    (first, second) =>
+                        first.turn === second.turn
+                            ? first.id - second.id
+                            : first.turn - second.turn,
+                );
+            });
+            setPendingMessages((existing) =>
+                existing.filter(
+                    (message) => message.id !== nextPendingMessage.id,
+                ),
+            );
+        }, revealDelay);
+
+        return () => window.clearTimeout(timer);
+    }, [nextPendingMessage]);
+
+    const expectedMessageCount =
+        currentExperiment.messages_count ?? currentMessages.length;
+    const hasUnfetchedMessages = currentMessages.length < expectedMessageCount;
     const shouldPoll =
+        runRequested ||
+        hasUnfetchedMessages ||
         currentExperiment.status === 'running' ||
         (currentExperiment.status === 'pending' &&
             currentExperiment.queued_at !== null);
+    const composingRole =
+        nextPendingMessage?.role === 'receiver'
+            ? 'receiver'
+            : shouldPoll && nextPendingMessage === null
+              ? 'sender'
+              : null;
+
+    useEffect(() => {
+        const isFinished =
+            currentExperiment.status === 'completed' ||
+            currentExperiment.status === 'failed';
+
+        if (
+            runRequested &&
+            runSubmissionSucceeded &&
+            isFinished &&
+            !hasUnfetchedMessages
+        ) {
+            runRequestedRef.current = false;
+            setRunRequested(false);
+        }
+    }, [
+        currentExperiment.status,
+        hasUnfetchedMessages,
+        runRequested,
+        runSubmissionSucceeded,
+    ]);
 
     useEffect(() => {
         if (!shouldPoll) {
-            setIsPolling(false);
-
             return;
         }
 
         const controller = new AbortController();
         let timer: number | undefined;
+        const pollingDelay = Math.min(pollIntervalMs, 1000);
 
         const poll = async () => {
-            setIsPolling(true);
-
             try {
                 const response = await fetch(
                     ExperimentUpdateController.url(currentExperiment.id, {
@@ -103,22 +388,52 @@ export default function ExperimentShow({
 
                 const update = (await response.json()) as UpdatePayload;
                 setCurrentExperiment(update.experiment);
-                setCurrentMessages((existing) => [
-                    ...existing,
-                    ...update.messages.filter(
-                        (incoming) =>
-                            !existing.some(
-                                (message) => message.id === incoming.id,
-                            ),
-                    ),
-                ]);
-                setCurrentEvents((existing) => [
-                    ...existing,
-                    ...update.events.filter(
-                        (incoming) =>
-                            !existing.some((event) => event.id === incoming.id),
-                    ),
-                ]);
+                const incomingMessages = update.messages.filter(
+                    (message) => !knownMessageIdsRef.current.has(message.id),
+                );
+
+                if (incomingMessages.length > 0) {
+                    const receivedAt = Date.now();
+
+                    for (const message of incomingMessages) {
+                        if (message.role === 'sender') {
+                            const measuredWait =
+                                receivedAt - turnWaitStartedAtRef.current;
+                            replyDelayByTurnRef.current.set(
+                                message.turn,
+                                Math.min(
+                                    MAX_REPLY_REVEAL_DELAY_MS,
+                                    Math.max(
+                                        MIN_REPLY_REVEAL_DELAY_MS,
+                                        measuredWait,
+                                    ),
+                                ),
+                            );
+                            turnWaitStartedAtRef.current = receivedAt;
+                        }
+
+                        knownMessageIdsRef.current.add(message.id);
+                    }
+
+                    setPendingMessages((existing) =>
+                        [...existing, ...incomingMessages].sort(
+                            (first, second) =>
+                                first.turn === second.turn
+                                    ? first.id - second.id
+                                    : first.turn - second.turn,
+                        ),
+                    );
+                }
+                setCurrentEvents((existing) => {
+                    const knownIds = new Set(existing.map((event) => event.id));
+
+                    return [
+                        ...existing,
+                        ...update.events.filter(
+                            (event) => !knownIds.has(event.id),
+                        ),
+                    ];
+                });
                 setCurrentVocabulary(update.vocabulary);
                 setCurrentCursor(update.cursor);
                 setPollingError(null);
@@ -132,13 +447,12 @@ export default function ExperimentShow({
                 }
             } finally {
                 if (!controller.signal.aborted) {
-                    setIsPolling(false);
-                    timer = window.setTimeout(poll, pollIntervalMs);
+                    timer = window.setTimeout(poll, pollingDelay);
                 }
             }
         };
 
-        timer = window.setTimeout(poll, pollIntervalMs);
+        void poll();
 
         return () => {
             controller.abort();
@@ -155,27 +469,89 @@ export default function ExperimentShow({
         shouldPoll,
     ]);
 
+    useEffect(() => {
+        const conversation = conversationRef.current;
+
+        if (!conversation || !shouldFollowLatestRef.current) {
+            return;
+        }
+
+        conversation.scrollTo({
+            top: conversation.scrollHeight,
+            behavior:
+                currentMessages.length === messages.length ? 'auto' : 'smooth',
+        });
+    }, [currentMessages.length, messages.length]);
+
+    const groupedMessages = useMemo(() => {
+        const groups = new Map<number, ExperimentMessage[]>();
+
+        for (const message of currentMessages) {
+            groups.set(message.turn, [
+                ...(groups.get(message.turn) ?? []),
+                message,
+            ]);
+        }
+
+        return Array.from(groups.entries()).sort(
+            ([firstTurn], [secondTurn]) => firstTurn - secondTurn,
+        );
+    }, [currentMessages]);
+
     const progress = Math.round(
         (currentExperiment.current_turn / currentExperiment.max_turns) * 100,
     );
+
+    const handleConversationScroll = () => {
+        const conversation = conversationRef.current;
+
+        if (!conversation) {
+            return;
+        }
+
+        const isNearBottom =
+            conversation.scrollHeight -
+                conversation.scrollTop -
+                conversation.clientHeight <
+            96;
+        shouldFollowLatestRef.current = isNearBottom;
+        setShowJumpToLatest(!isNearBottom);
+    };
+
+    const jumpToLatest = () => {
+        const conversation = conversationRef.current;
+
+        if (!conversation) {
+            return;
+        }
+
+        shouldFollowLatestRef.current = true;
+        setShowJumpToLatest(false);
+        conversation.scrollTo({
+            top: conversation.scrollHeight,
+            behavior: 'smooth',
+        });
+    };
 
     return (
         <>
             <Head title={currentExperiment.name} />
 
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-                <Link
-                    href={index()}
-                    className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-                >
-                    <ArrowLeft className="size-4" aria-hidden="true" />
-                    All experiments
-                </Link>
-
-                <header className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex w-full flex-1 flex-col gap-4 p-3 sm:p-5 lg:h-[calc(100dvh-4rem)] lg:min-h-0 lg:p-6">
+                <header className="shrink-0 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="min-w-0">
+                            <Link
+                                href={index()}
+                                className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                            >
+                                <ArrowLeft
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                />
+                                All experiments
+                            </Link>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <ExperimentStatusBadge
                                     status={currentExperiment.status}
                                 />
@@ -184,87 +560,139 @@ export default function ExperimentShow({
                                     {currentExperiment.model}
                                 </span>
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                                    {currentExperiment.name}
-                                </h1>
-                                <p className="mt-1 text-sm text-muted-foreground">
+                            <h1 className="mt-2 truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                                {currentExperiment.name}
+                            </h1>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div
+                                className="inline-flex h-9 items-center gap-2 rounded-lg border bg-muted/35 px-3 text-xs font-medium text-muted-foreground"
+                                aria-live="polite"
+                            >
+                                <span
+                                    className={`size-2 rounded-full ${
+                                        shouldPoll
+                                            ? 'animate-pulse bg-foreground'
+                                            : 'bg-muted-foreground/40'
+                                    }`}
+                                />
+                                {shouldPoll ? 'Live updates on' : 'Up to date'}
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setHistoryOpen(true)}
+                            >
+                                <History aria-hidden="true" />
+                                History
+                            </Button>
+
+                            {(currentExperiment.status === 'failed' ||
+                                (currentExperiment.status === 'pending' &&
+                                    currentExperiment.queued_at === null)) && (
+                                <Form
+                                    {...RunExperimentController.form(
+                                        currentExperiment.id,
+                                    )}
+                                    options={{ preserveScroll: true }}
+                                    onStart={() => {
+                                        runRequestedRef.current = true;
+                                        turnWaitStartedAtRef.current =
+                                            Date.now();
+                                        replyDelayByTurnRef.current.clear();
+                                        setRunRequested(true);
+                                        setRunSubmissionSucceeded(false);
+                                    }}
+                                    onSuccess={() =>
+                                        setRunSubmissionSucceeded(true)
+                                    }
+                                    onCancel={() => {
+                                        runRequestedRef.current = false;
+                                        setRunRequested(false);
+                                        setRunSubmissionSucceeded(false);
+                                    }}
+                                    onError={() => {
+                                        runRequestedRef.current = false;
+                                        setRunRequested(false);
+                                        setRunSubmissionSucceeded(false);
+                                    }}
+                                    onHttpException={() => {
+                                        runRequestedRef.current = false;
+                                        setRunRequested(false);
+                                        setRunSubmissionSucceeded(false);
+                                    }}
+                                    onNetworkError={() => {
+                                        runRequestedRef.current = false;
+                                        setRunRequested(false);
+                                        setRunSubmissionSucceeded(false);
+                                    }}
+                                >
+                                    {({ processing, errors }) => (
+                                        <div className="grid gap-1">
+                                            <Button disabled={processing}>
+                                                <Play aria-hidden="true" />
+                                                {processing
+                                                    ? 'Queueing…'
+                                                    : currentExperiment.status ===
+                                                        'failed'
+                                                      ? 'Resume'
+                                                      : 'Start'}
+                                            </Button>
+                                            <InputError
+                                                message={errors.experiment}
+                                            />
+                                        </div>
+                                    )}
+                                </Form>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>
                                     Turn {currentExperiment.current_turn} of{' '}
                                     {currentExperiment.max_turns}
-                                </p>
+                                </span>
+                                <span>{progress}%</span>
+                            </div>
+                            <div
+                                className="h-1.5 overflow-hidden rounded-full bg-muted"
+                                role="progressbar"
+                                aria-label="Conversation progress"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={progress}
+                            >
+                                <div
+                                    className="h-full rounded-full bg-primary transition-[width] duration-500"
+                                    style={{ width: `${progress}%` }}
+                                />
                             </div>
                         </div>
-
-                        {(currentExperiment.status === 'failed' ||
-                            (currentExperiment.status === 'pending' &&
-                                currentExperiment.queued_at === null)) && (
-                            <Form
-                                {...RunExperimentController.form(
-                                    currentExperiment.id,
-                                )}
-                                options={{ preserveScroll: true }}
-                            >
-                                {({ processing, errors }) => (
-                                    <div className="grid gap-2">
-                                        <Button disabled={processing} size="lg">
-                                            <Play aria-hidden="true" />
-                                            {processing
-                                                ? 'Queueing…'
-                                                : currentExperiment.status ===
-                                                    'failed'
-                                                  ? 'Resume experiment'
-                                                  : 'Start experiment'}
-                                        </Button>
-                                        <InputError
-                                            message={errors.experiment}
-                                        />
-                                    </div>
-                                )}
-                            </Form>
-                        )}
-                    </div>
-
-                    <div className="mt-6 space-y-2">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Conversation progress</span>
-                            <span>{progress}%</span>
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                            <span>
+                                <strong className="font-semibold text-foreground">
+                                    {currentMessages.length}
+                                </strong>{' '}
+                                messages
+                            </span>
+                            <span>
+                                <strong className="font-semibold text-foreground">
+                                    {currentVocabulary.length}
+                                </strong>{' '}
+                                symbols
+                            </span>
                         </div>
-                        <div
-                            className="h-2 overflow-hidden rounded-full bg-muted"
-                            role="progressbar"
-                            aria-label="Conversation progress"
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={progress}
-                        >
-                            <div
-                                className="h-full rounded-full bg-primary transition-all"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                    </div>
-
-                    <div
-                        className="mt-4 flex min-h-5 items-center gap-2 text-xs text-muted-foreground"
-                        aria-live="polite"
-                    >
-                        {shouldPoll && (
-                            <>
-                                <RefreshCw
-                                    className={`size-3.5 ${isPolling ? 'animate-spin' : ''}`}
-                                    aria-hidden="true"
-                                />
-                                {isPolling
-                                    ? 'Checking for new messages…'
-                                    : 'Live monitoring active'}
-                            </>
-                        )}
                     </div>
                 </header>
 
                 {pollingError && (
                     <div
-                        className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+                        className="flex shrink-0 items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
                         role="alert"
                     >
                         <TriangleAlert
@@ -277,7 +705,7 @@ export default function ExperimentShow({
 
                 {currentExperiment.status === 'failed' && (
                     <div
-                        className="rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
+                        className="shrink-0 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
                         role="alert"
                     >
                         <h2 className="font-semibold text-red-900 dark:text-red-100">
@@ -295,212 +723,317 @@ export default function ExperimentShow({
                     </div>
                 )}
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)]">
+                <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                     <section
-                        className="rounded-xl border bg-card p-5 shadow-sm sm:p-6"
+                        className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm lg:min-h-0"
                         aria-labelledby="conversation-title"
                     >
-                        <div className="mb-6 flex items-center gap-3">
-                            <MessageSquareText
-                                className="size-5 text-primary"
-                                aria-hidden="true"
-                            />
-                            <div>
-                                <h2
-                                    id="conversation-title"
-                                    className="font-semibold"
-                                >
-                                    Sender / Receiver conversation
-                                </h2>
-                                <p className="text-xs text-muted-foreground">
-                                    Symbolic text is shown beside its
-                                    deterministic decoding.
-                                </p>
+                        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-5">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                                    <MessageSquareText
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+                                <div className="min-w-0">
+                                    <h2
+                                        id="conversation-title"
+                                        className="truncate text-sm font-semibold"
+                                    >
+                                        Live agent conversation
+                                    </h2>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        New messages are inserted automatically
+                                        as each agent responds.
+                                    </p>
+                                </div>
                             </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="xl:hidden"
+                                onClick={() => setVocabularyOpen(true)}
+                            >
+                                <BookOpenText aria-hidden="true" />
+                                Vocabulary
+                            </Button>
                         </div>
 
-                        {currentMessages.length === 0 ? (
-                            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                                Messages will appear here after the queued run
-                                starts.
-                            </div>
-                        ) : (
-                            <ol className="flex flex-col gap-4">
-                                {currentMessages.map((message) => (
-                                    <li
-                                        key={message.id}
-                                        className={`rounded-xl border p-4 ${
-                                            message.role === 'sender'
-                                                ? 'border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/40'
-                                                : 'border-cyan-200 bg-cyan-50/60 dark:border-cyan-900 dark:bg-cyan-950/40'
-                                        }`}
-                                    >
-                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                            <span className="text-sm font-semibold capitalize">
-                                                {message.role}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                Turn {message.turn}
-                                            </span>
+                        <div className="relative min-h-0 flex-1">
+                            <div
+                                ref={conversationRef}
+                                onScroll={handleConversationScroll}
+                                className="h-full overflow-y-auto px-4 py-5 sm:px-6"
+                            >
+                                {groupedMessages.length === 0 &&
+                                composingRole === null ? (
+                                    <div className="flex min-h-72 items-center justify-center">
+                                        <div className="max-w-sm rounded-2xl border border-dashed p-8 text-center">
+                                            <MessageSquareText
+                                                className="mx-auto size-7 text-muted-foreground/50"
+                                                aria-hidden="true"
+                                            />
+                                            <h3 className="mt-3 text-sm font-semibold">
+                                                Waiting for the first message
+                                            </h3>
+                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                                The conversation will populate
+                                                here without a page refresh.
+                                            </p>
                                         </div>
-                                        <div className="grid gap-3 lg:grid-cols-2">
-                                            <div className="rounded-lg border bg-background/70 p-3">
-                                                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                                                    Symbolic
-                                                </p>
-                                                <p className="font-mono text-sm leading-6 break-words">
-                                                    {message.symbolic_content}
-                                                </p>
-                                            </div>
-                                            <div className="rounded-lg border bg-background/70 p-3">
-                                                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                                                    Decoded
-                                                </p>
-                                                <p className="text-sm leading-6 break-words">
-                                                    {message.decoded_content}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {message.vocabulary.length > 0 && (
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {message.vocabulary.map(
-                                                    (item) => (
-                                                        <span
-                                                            key={`${item.symbol}-${item.version}`}
-                                                            className="rounded-full border bg-background px-2 py-1 font-mono text-xs"
-                                                            title={item.meaning}
+                                    </div>
+                                ) : (
+                                    <>
+                                        {groupedMessages.length > 0 && (
+                                            <ol className="flex flex-col gap-4">
+                                                {groupedMessages.map(
+                                                    ([turn, turnMessages]) => (
+                                                        <li
+                                                            key={turn}
+                                                            aria-label={`Turn ${turn}`}
                                                         >
-                                                            {`[[${item.symbol}]]`}{' '}
-                                                            v{item.version}
-                                                        </span>
+                                                            <ol className="flex flex-col gap-3">
+                                                                {turnMessages.map(
+                                                                    (
+                                                                        message,
+                                                                    ) => {
+                                                                        const isSender =
+                                                                            message.role ===
+                                                                            'sender';
+
+                                                                        return (
+                                                                            <li
+                                                                                key={
+                                                                                    message.id
+                                                                                }
+                                                                                className={`flex ${
+                                                                                    isSender
+                                                                                        ? 'justify-end'
+                                                                                        : 'justify-start'
+                                                                                }`}
+                                                                            >
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        setSelectedMessage(
+                                                                                            message,
+                                                                                        )
+                                                                                    }
+                                                                                    className={`group w-full max-w-4xl rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
+                                                                                        isSender
+                                                                                            ? 'rounded-tr-md bg-background'
+                                                                                            : 'rounded-tl-md bg-muted/45'
+                                                                                    }`}
+                                                                                    aria-label={`Inspect turn ${message.turn} ${message.role} message`}
+                                                                                >
+                                                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span
+                                                                                                className={`flex size-7 items-center justify-center rounded-full text-xs font-bold ${
+                                                                                                    isSender
+                                                                                                        ? 'bg-primary text-primary-foreground'
+                                                                                                        : 'bg-secondary text-secondary-foreground'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {isSender
+                                                                                                    ? 'S'
+                                                                                                    : 'R'}
+                                                                                            </span>
+                                                                                            <span className="text-sm font-semibold capitalize">
+                                                                                                {
+                                                                                                    message.role
+                                                                                                }
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <span className="text-xs text-muted-foreground">
+                                                                                            {formatTime(
+                                                                                                message.created_at,
+                                                                                            )}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                                                                        <div className="rounded-xl border bg-card/80 p-3">
+                                                                                            <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                                                                                                Symbolic
+                                                                                            </p>
+                                                                                            <p className="mt-1.5 font-mono text-sm leading-6 break-words whitespace-pre-wrap">
+                                                                                                {
+                                                                                                    message.symbolic_content
+                                                                                                }
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="rounded-xl border bg-card/80 p-3">
+                                                                                            <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                                                                                                Decoded
+                                                                                            </p>
+                                                                                            <p className="mt-1.5 text-sm leading-6 break-words whitespace-pre-wrap">
+                                                                                                {
+                                                                                                    message.decoded_content
+                                                                                                }
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                                                                                        <span>
+                                                                                            {
+                                                                                                message
+                                                                                                    .vocabulary
+                                                                                                    .length
+                                                                                            }{' '}
+                                                                                            {message
+                                                                                                .vocabulary
+                                                                                                .length ===
+                                                                                            1
+                                                                                                ? 'symbol'
+                                                                                                : 'symbols'}
+                                                                                        </span>
+                                                                                        <span className="font-medium text-foreground opacity-60 transition group-hover:opacity-100">
+                                                                                            View
+                                                                                            details
+                                                                                            →
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </button>
+                                                                            </li>
+                                                                        );
+                                                                    },
+                                                                )}
+                                                            </ol>
+                                                        </li>
                                                     ),
                                                 )}
+                                            </ol>
+                                        )}
+
+                                        {composingRole !== null && (
+                                            <div className="mt-3">
+                                                <ComposingIndicator
+                                                    role={composingRole}
+                                                />
                                             </div>
                                         )}
-                                    </li>
-                                ))}
-                            </ol>
-                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            {showJumpToLatest && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={jumpToLatest}
+                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-background shadow-lg"
+                                >
+                                    <ArrowDown aria-hidden="true" />
+                                    Jump to latest
+                                </Button>
+                            )}
+                        </div>
                     </section>
 
-                    <div className="flex flex-col gap-6">
-                        <section
-                            className="rounded-xl border bg-card p-5 shadow-sm"
-                            aria-labelledby="dictionary-title"
-                        >
-                            <div className="mb-5 flex items-center gap-3">
-                                <BookOpenText
-                                    className="size-5 text-primary"
-                                    aria-hidden="true"
-                                />
+                    <aside
+                        className="hidden min-h-0 overflow-y-auto rounded-2xl border bg-card p-4 shadow-sm xl:block"
+                        aria-labelledby="vocabulary-title"
+                    >
+                        <div className="sticky top-0 z-10 mb-4 border-b bg-card pb-3">
+                            <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h2
-                                        id="dictionary-title"
-                                        className="font-semibold"
+                                        id="vocabulary-title"
+                                        className="text-sm font-semibold"
                                     >
                                         Active vocabulary
                                     </h2>
-                                    <p className="text-xs text-muted-foreground">
-                                        Latest immutable definition per symbol
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                        Latest definition for each symbol
                                     </p>
                                 </div>
+                                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
+                                    {currentVocabulary.length}
+                                </span>
                             </div>
-
-                            {currentVocabulary.length === 0 ? (
-                                <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
-                                    No symbols have been proposed.
-                                </p>
-                            ) : (
-                                <dl className="flex flex-col gap-3">
-                                    {currentVocabulary.map((entry) => (
-                                        <div
-                                            key={entry.id}
-                                            className="rounded-lg border p-3"
-                                        >
-                                            <div className="flex items-center justify-between gap-3">
-                                                <dt className="font-mono text-sm font-semibold">
-                                                    {`[[${entry.symbol}]]`}
-                                                </dt>
-                                                <span className="text-xs text-muted-foreground">
-                                                    v
-                                                    {entry.current?.version ??
-                                                        0}
-                                                </span>
-                                            </div>
-                                            <dd className="mt-2 text-sm">
-                                                {entry.current?.meaning}
-                                            </dd>
-                                            {entry.current?.description && (
-                                                <dd className="mt-1 text-xs text-muted-foreground">
-                                                    {entry.current.description}
-                                                </dd>
-                                            )}
-                                        </div>
-                                    ))}
-                                </dl>
-                            )}
-                        </section>
-
-                        <section
-                            className="rounded-xl border bg-card p-5 shadow-sm"
-                            aria-labelledby="history-title"
-                        >
-                            <div className="mb-5 flex items-center gap-3">
-                                <History
-                                    className="size-5 text-primary"
-                                    aria-hidden="true"
-                                />
-                                <div>
-                                    <h2
-                                        id="history-title"
-                                        className="font-semibold"
-                                    >
-                                        Vocabulary history
-                                    </h2>
-                                    <p className="text-xs text-muted-foreground">
-                                        Append-only creation and revision events
-                                    </p>
-                                </div>
-                            </div>
-
-                            {currentEvents.length === 0 ? (
-                                <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
-                                    History will appear as definitions evolve.
-                                </p>
-                            ) : (
-                                <ol className="flex flex-col gap-4 border-l pl-4">
-                                    {currentEvents.map((event) => (
-                                        <li key={event.id} className="relative">
-                                            <span
-                                                className="absolute top-1.5 -left-[1.3rem] size-2 rounded-full bg-primary"
-                                                aria-hidden="true"
-                                            />
-                                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                <span className="font-semibold text-foreground capitalize">
-                                                    {event.type}
-                                                </span>
-                                                <span>{`[[${event.symbol}]]`}</span>
-                                                <span>v{event.version}</span>
-                                            </div>
-                                            <p className="mt-1 text-sm">
-                                                {event.meaning}
-                                            </p>
-                                            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                                <Clock3
-                                                    className="size-3"
-                                                    aria-hidden="true"
-                                                />
-                                                {event.proposer_role}, turn{' '}
-                                                {event.turn}
-                                            </p>
-                                        </li>
-                                    ))}
-                                </ol>
-                            )}
-                        </section>
-                    </div>
+                        </div>
+                        <VocabularyList vocabulary={currentVocabulary} />
+                    </aside>
                 </div>
             </div>
+
+            <MessageDetailDialog
+                message={selectedMessage}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedMessage(null);
+                    }
+                }}
+            />
+
+            <Dialog open={vocabularyOpen} onOpenChange={setVocabularyOpen}>
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Active vocabulary</DialogTitle>
+                        <DialogDescription>
+                            The latest immutable definition for each symbol.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <VocabularyList vocabulary={currentVocabulary} />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Vocabulary history</DialogTitle>
+                        <DialogDescription>
+                            Append-only creation and revision events from this
+                            experiment.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {currentEvents.length === 0 ? (
+                        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                            History will appear as definitions evolve.
+                        </p>
+                    ) : (
+                        <ol className="flex flex-col gap-4 border-l pl-5">
+                            {currentEvents.map((event) => (
+                                <li key={event.id} className="relative">
+                                    <span
+                                        className="absolute top-1.5 -left-[1.48rem] size-2 rounded-full bg-primary"
+                                        aria-hidden="true"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span className="font-semibold text-foreground capitalize">
+                                            {event.type}
+                                        </span>
+                                        <span className="font-mono">
+                                            {`[[${event.symbol}]]`}
+                                        </span>
+                                        <span>v{event.version}</span>
+                                    </div>
+                                    <p className="mt-1 text-sm leading-6">
+                                        {event.meaning}
+                                    </p>
+                                    {event.description && (
+                                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                            {event.description}
+                                        </p>
+                                    )}
+                                    <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Clock3
+                                            className="size-3"
+                                            aria-hidden="true"
+                                        />
+                                        {event.proposer_role}, turn {event.turn}
+                                    </p>
+                                </li>
+                            ))}
+                        </ol>
+                    )}
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
