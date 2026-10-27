@@ -4,25 +4,32 @@ import {
     ArrowLeft,
     BookOpenText,
     Clock3,
+    Copy,
     History,
     MessageSquareText,
     Play,
+    Settings2,
     TriangleAlert,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import CloneExperimentController from '@/actions/App/Http/Controllers/CloneExperimentController';
 import ExperimentUpdateController from '@/actions/App/Http/Controllers/ExperimentUpdateController';
 import RunExperimentController from '@/actions/App/Http/Controllers/RunExperimentController';
+import UpdateExperimentInstructionsController from '@/actions/App/Http/Controllers/UpdateExperimentInstructionsController';
 import { index } from '@/actions/App/Http/Controllers/ExperimentController';
 import { ExperimentStatusBadge } from '@/components/experiment-status-badge';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import type {
     Experiment,
     ExperimentMessage,
@@ -225,6 +232,167 @@ function MessageDetailDialog({
     );
 }
 
+function PromptConfigurationDialog({
+    experiment,
+    open,
+    onOpenChange,
+}: {
+    experiment: Experiment;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const isEditable =
+        experiment.status === 'pending' && experiment.queued_at === null;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Agent instructions</DialogTitle>
+                    <DialogDescription>
+                        Give each role an optional objective for this
+                        experiment. The symbolic-language protocol and
+                        structured response rules remain fixed.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="rounded-xl border bg-muted/35 p-3 text-xs leading-5 text-muted-foreground">
+                    Instructions are stored with the experiment for
+                    reproducibility. Once a run is queued, clone it to change
+                    the briefs without rewriting its history.
+                </div>
+
+                {isEditable ? (
+                    <Form
+                        key={`${experiment.id}-${experiment.updated_at}`}
+                        {...UpdateExperimentInstructionsController.form(
+                            experiment.id,
+                        )}
+                        options={{ preserveScroll: true }}
+                        onSuccess={() => onOpenChange(false)}
+                        className="space-y-5"
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="dialog_sender_instructions">
+                                            Sender brief
+                                        </Label>
+                                        <textarea
+                                            id="dialog_sender_instructions"
+                                            name="sender_instructions"
+                                            rows={6}
+                                            maxLength={2000}
+                                            defaultValue={
+                                                experiment.sender_instructions ??
+                                                ''
+                                            }
+                                            placeholder="Introduce spatial concepts gradually."
+                                            className="min-h-36 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                            aria-invalid={Boolean(
+                                                errors.sender_instructions,
+                                            )}
+                                        />
+                                        <InputError
+                                            message={errors.sender_instructions}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="dialog_receiver_instructions">
+                                            Receiver brief
+                                        </Label>
+                                        <textarea
+                                            id="dialog_receiver_instructions"
+                                            name="receiver_instructions"
+                                            rows={6}
+                                            maxLength={2000}
+                                            defaultValue={
+                                                experiment.receiver_instructions ??
+                                                ''
+                                            }
+                                            placeholder="Challenge ambiguous definitions before reusing them."
+                                            className="min-h-36 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                            aria-invalid={Boolean(
+                                                errors.receiver_instructions,
+                                            )}
+                                        />
+                                        <InputError
+                                            message={
+                                                errors.receiver_instructions
+                                            }
+                                        />
+                                    </div>
+                                </div>
+
+                                <InputError message={errors.experiment} />
+
+                                <DialogFooter>
+                                    <DialogClose asChild>
+                                        <Button type="button" variant="outline">
+                                            Cancel
+                                        </Button>
+                                    </DialogClose>
+                                    <Button disabled={processing}>
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save instructions'}
+                                    </Button>
+                                </DialogFooter>
+                            </>
+                        )}
+                    </Form>
+                ) : (
+                    <div className="space-y-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <section className="rounded-xl border p-4">
+                                <h3 className="text-sm font-semibold">
+                                    Sender brief
+                                </h3>
+                                <p className="mt-2 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
+                                    {experiment.sender_instructions ??
+                                        'No supplementary instructions.'}
+                                </p>
+                            </section>
+                            <section className="rounded-xl border p-4">
+                                <h3 className="text-sm font-semibold">
+                                    Receiver brief
+                                </h3>
+                                <p className="mt-2 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
+                                    {experiment.receiver_instructions ??
+                                        'No supplementary instructions.'}
+                                </p>
+                            </section>
+                        </div>
+
+                        <Form
+                            {...CloneExperimentController.form(experiment.id)}
+                            options={{ preserveScroll: true }}
+                        >
+                            {({ processing }) => (
+                                <DialogFooter>
+                                    <DialogClose asChild>
+                                        <Button type="button" variant="outline">
+                                            Close
+                                        </Button>
+                                    </DialogClose>
+                                    <Button disabled={processing}>
+                                        <Copy aria-hidden="true" />
+                                        {processing
+                                            ? 'Cloning…'
+                                            : 'Clone to edit'}
+                                    </Button>
+                                </DialogFooter>
+                            )}
+                        </Form>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function ExperimentShow({
     experiment,
     messages,
@@ -248,6 +416,8 @@ export default function ExperimentShow({
         useState<ExperimentMessage | null>(null);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [vocabularyOpen, setVocabularyOpen] = useState(false);
+    const [promptConfigurationOpen, setPromptConfigurationOpen] =
+        useState(false);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const conversationRef = useRef<HTMLDivElement>(null);
     const shouldFollowLatestRef = useRef(true);
@@ -257,6 +427,9 @@ export default function ExperimentShow({
     );
     const turnWaitStartedAtRef = useRef(Date.now());
     const replyDelayByTurnRef = useRef(new Map<number, number>());
+    const lastRevealedMessageRef = useRef<ExperimentMessage | null>(
+        messages[messages.length - 1] ?? null,
+    );
 
     useEffect(() => {
         setCurrentExperiment(experiment);
@@ -274,6 +447,8 @@ export default function ExperimentShow({
             );
             turnWaitStartedAtRef.current = Date.now();
             replyDelayByTurnRef.current.clear();
+            lastRevealedMessageRef.current =
+                messages[messages.length - 1] ?? null;
         }
     }, [cursor, events, experiment, messages, vocabulary]);
 
@@ -284,11 +459,23 @@ export default function ExperimentShow({
             return;
         }
 
+        const previousMessage = lastRevealedMessageRef.current;
+        const startsNewTurn =
+            nextPendingMessage.role === 'sender' &&
+            previousMessage?.role === 'receiver' &&
+            nextPendingMessage.turn > previousMessage.turn;
+        const previousTurnDelay =
+            previousMessage === null
+                ? DEFAULT_REPLY_REVEAL_DELAY_MS
+                : (replyDelayByTurnRef.current.get(previousMessage.turn) ??
+                  DEFAULT_REPLY_REVEAL_DELAY_MS);
         const revealDelay =
             nextPendingMessage.role === 'receiver'
                 ? (replyDelayByTurnRef.current.get(nextPendingMessage.turn) ??
                   DEFAULT_REPLY_REVEAL_DELAY_MS)
-                : 0;
+                : startsNewTurn
+                  ? previousTurnDelay
+                  : 0;
 
         const timer = window.setTimeout(() => {
             setCurrentMessages((existing) => {
@@ -307,6 +494,7 @@ export default function ExperimentShow({
                             : first.turn - second.turn,
                 );
             });
+            lastRevealedMessageRef.current = nextPendingMessage;
             setPendingMessages((existing) =>
                 existing.filter(
                     (message) => message.id !== nextPendingMessage.id,
@@ -327,11 +515,7 @@ export default function ExperimentShow({
         (currentExperiment.status === 'pending' &&
             currentExperiment.queued_at !== null);
     const composingRole =
-        nextPendingMessage?.role === 'receiver'
-            ? 'receiver'
-            : shouldPoll && nextPendingMessage === null
-              ? 'sender'
-              : null;
+        nextPendingMessage?.role ?? (shouldPoll ? 'sender' : null);
 
     useEffect(() => {
         const isFinished =
@@ -579,6 +763,15 @@ export default function ExperimentShow({
                                 />
                                 {shouldPoll ? 'Live updates on' : 'Up to date'}
                             </div>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setPromptConfigurationOpen(true)}
+                            >
+                                <Settings2 aria-hidden="true" />
+                                Agent instructions
+                            </Button>
 
                             <Button
                                 type="button"
@@ -960,6 +1153,12 @@ export default function ExperimentShow({
                         <VocabularyList vocabulary={currentVocabulary} />
                     </aside>
                 </div>
+
+                <PromptConfigurationDialog
+                    experiment={currentExperiment}
+                    open={promptConfigurationOpen}
+                    onOpenChange={setPromptConfigurationOpen}
+                />
             </div>
 
             <MessageDetailDialog

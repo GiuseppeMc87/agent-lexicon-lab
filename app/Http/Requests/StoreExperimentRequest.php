@@ -31,6 +31,25 @@ class StoreExperimentRequest extends FormRequest
                 'min:1',
                 'max:'.config('agent.maximum_turns'),
             ],
+            'sender_instructions' => ['nullable', 'string', 'max:2000'],
+            'receiver_instructions' => ['nullable', 'string', 'max:2000'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->trimNullableInstructions();
+    }
+
+    private function trimNullableInstructions(): void
+    {
+        foreach (['sender_instructions', 'receiver_instructions'] as $field) {
+            $value = $this->input($field);
+
+            if (is_string($value)) {
+                $trimmed = trim($value);
+                $this->merge([$field => $trimmed === '' ? null : $trimmed]);
+            }
+        }
     }
 }

@@ -109,6 +109,104 @@ class ExperimentOrchestratorTest extends TestCase
         $this->assertSame([], $provider->receiverVocabulary);
     }
 
+    public function test_each_role_receives_its_own_experiment_instructions(): void
+    {
+        $provider = new class implements AgentProvider
+        {
+            public ?string $senderInstructions = null;
+
+            public ?string $receiverInstructions = null;
+
+            public function name(): string
+            {
+                return 'fake';
+            }
+
+            public function model(): string
+            {
+                return 'instruction-spy';
+            }
+
+            public function generateSenderResponse(AgentContext $context): SenderResponse
+            {
+                $this->senderInstructions = $context->roleInstructions;
+
+                return new SenderResponse('Use [[signal]].', [
+                    new VocabularyProposal('signal', 'sender meaning', null),
+                ]);
+            }
+
+            public function generateReceiverResponse(AgentContext $context): ReceiverResponse
+            {
+                $this->receiverInstructions = $context->roleInstructions;
+
+                return new ReceiverResponse('I infer [[signal]].', [
+                    new VocabularyProposal('signal', 'receiver meaning', null),
+                ]);
+            }
+        };
+        $this->app->instance(AgentProvider::class, $provider);
+        $experiment = Experiment::factory()->create([
+            'model' => 'instruction-spy',
+            'max_turns' => 1,
+            'sender_instructions' => 'Introduce spatial concepts.',
+            'receiver_instructions' => 'Prefer cautious interpretations.',
+        ]);
+
+        app(ExperimentOrchestrator::class)->run($experiment);
+
+        $this->assertSame('Introduce spatial concepts.', $provider->senderInstructions);
+        $this->assertSame('Prefer cautious interpretations.', $provider->receiverInstructions);
+    }
+
+    public function test_missing_role_instructions_use_configured_defaults(): void
+    {
+        config()->set('agent.default_instructions.sender', 'Default sender brief.');
+        config()->set('agent.default_instructions.receiver', 'Default receiver brief.');
+        $provider = new class implements AgentProvider
+        {
+            public ?string $senderInstructions = null;
+
+            public ?string $receiverInstructions = null;
+
+            public function name(): string
+            {
+                return 'fake';
+            }
+
+            public function model(): string
+            {
+                return 'default-instruction-spy';
+            }
+
+            public function generateSenderResponse(AgentContext $context): SenderResponse
+            {
+                $this->senderInstructions = $context->roleInstructions;
+
+                return new SenderResponse('A sender reply.', []);
+            }
+
+            public function generateReceiverResponse(AgentContext $context): ReceiverResponse
+            {
+                $this->receiverInstructions = $context->roleInstructions;
+
+                return new ReceiverResponse('A receiver reply.', []);
+            }
+        };
+        $this->app->instance(AgentProvider::class, $provider);
+        $experiment = Experiment::factory()->create([
+            'model' => 'default-instruction-spy',
+            'max_turns' => 1,
+            'sender_instructions' => null,
+            'receiver_instructions' => null,
+        ]);
+
+        app(ExperimentOrchestrator::class)->run($experiment);
+
+        $this->assertSame('Default sender brief.', $provider->senderInstructions);
+        $this->assertSame('Default receiver brief.', $provider->receiverInstructions);
+    }
+
     public function test_provider_failure_sets_terminal_sanitized_failed_state(): void
     {
         $provider = new class implements AgentProvider

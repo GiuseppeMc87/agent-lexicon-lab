@@ -33,7 +33,15 @@ class ExperimentControllerTest extends TestCase
         $response->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('experiments/index')
             ->has('experiments.data', 1)
-            ->where('experiments.data.0.name', 'Visible experiment'));
+            ->where('experiments.data.0.name', 'Visible experiment')
+            ->where(
+                'default_instructions.sender',
+                config('agent.default_instructions.sender'),
+            )
+            ->where(
+                'default_instructions.receiver',
+                config('agent.default_instructions.receiver'),
+            ));
     }
 
     public function test_valid_payload_creates_pending_experiment_without_starting_it(): void
@@ -44,6 +52,8 @@ class ExperimentControllerTest extends TestCase
             'name' => 'Signal negotiation',
             'max_turns' => 4,
             'provider' => 'vertex',
+            'sender_instructions' => '  Prefer spatial concepts.  ',
+            'receiver_instructions' => '  Ask for clarification.  ',
         ]);
 
         $experiment = Experiment::query()->sole();
@@ -52,11 +62,36 @@ class ExperimentControllerTest extends TestCase
         $this->assertSame(ExperimentStatus::Pending, $experiment->status);
         $this->assertSame('fake', $experiment->provider);
         $this->assertSame(4, $experiment->max_turns);
+        $this->assertSame('Prefer spatial concepts.', $experiment->sender_instructions);
+        $this->assertSame('Ask for clarification.', $experiment->receiver_instructions);
         $this->assertNull($experiment->queued_at);
+    }
+
+    public function test_blank_agent_instructions_use_configured_defaults(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('experiments.store'), [
+            'name' => 'Default protocol',
+            'max_turns' => 2,
+            'sender_instructions' => '   ',
+            'receiver_instructions' => '',
+        ])->assertRedirect();
+
+        $experiment = Experiment::query()->sole();
+        $this->assertSame(
+            config('agent.default_instructions.sender'),
+            $experiment->sender_instructions,
+        );
+        $this->assertSame(
+            config('agent.default_instructions.receiver'),
+            $experiment->receiver_instructions,
+        );
     }
 
     public function test_invalid_payload_returns_validation_messages_and_creates_nothing(): void
     {
+        config()->set('agent.maximum_turns', 8);
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post(route('experiments.store'), [

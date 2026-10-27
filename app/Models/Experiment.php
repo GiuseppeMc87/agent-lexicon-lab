@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\Auth;
  * @property ExperimentStatus $status
  * @property string $provider
  * @property string $model
+ * @property string|null $sender_instructions
+ * @property string|null $receiver_instructions
  * @property int $max_turns
  * @property int $current_turn
  * @property int $lock_version
@@ -36,6 +38,8 @@ use Illuminate\Support\Facades\Auth;
     'status',
     'provider',
     'model',
+    'sender_instructions',
+    'receiver_instructions',
     'max_turns',
     'current_turn',
     'lock_version',

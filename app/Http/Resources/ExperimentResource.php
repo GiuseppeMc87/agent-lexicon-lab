@@ -22,6 +22,8 @@ class ExperimentResource extends JsonResource
             'status' => $this->status->value,
             'provider' => $this->provider,
             'model' => $this->model,
+            'sender_instructions' => $this->sender_instructions,
+            'receiver_instructions' => $this->receiver_instructions,
             'max_turns' => $this->max_turns,
             'current_turn' => $this->current_turn,
             'queued_at' => $this->queued_at?->toIso8601String(),

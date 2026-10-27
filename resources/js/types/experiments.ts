@@ -6,6 +6,8 @@ export type Experiment = {
     status: ExperimentStatus;
     provider: string;
     model: string;
+    sender_instructions: string | null;
+    receiver_instructions: string | null;
     max_turns: number;
     current_turn: number;
     queued_at: string | null;

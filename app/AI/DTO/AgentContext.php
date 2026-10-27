@@ -14,6 +14,7 @@ final readonly class AgentContext
         public int $maximumTurns,
         public array $messages,
         public array $vocabulary,
+        public ?string $roleInstructions = null,
     ) {}
 
     /**
@@ -27,6 +28,7 @@ final readonly class AgentContext
             'maximum_turns' => $this->maximumTurns,
             'messages' => $this->messages,
             'known_vocabulary' => $this->vocabulary,
+            'role_instructions' => $this->roleInstructions,
         ];
     }
 }

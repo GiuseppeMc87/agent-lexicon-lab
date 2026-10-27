@@ -21,6 +21,19 @@ use Throwable;
 
 class VertexAiProvider implements AgentProvider
 {
+    private const int MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS = 2;
+
+    /** @var list<string> */
+    private const array RETRYABLE_STRUCTURED_RESPONSE_FAILURES = [
+        'provider_empty_response',
+        'malformed_json',
+        'invalid_response_shape',
+        'unexpected_response_fields',
+        'invalid_vocabulary_shape',
+        'unexpected_vocabulary_fields',
+        'response_validation_failed',
+    ];
+
     private ?FetchAuthTokenInterface $credentials = null;
 
     /** @var array{token: string, expires_at: int}|null */
@@ -69,50 +82,87 @@ class VertexAiProvider implements AgentProvider
     private function generate(AgentRole $role, AgentContext $context): array
     {
         $prompt = $this->promptFactory->make($role, $context);
+        $attempt = 1;
 
-        try {
-            $response = $this->sendRequest($prompt);
-        } catch (ConnectionException) {
-            throw new ProviderException(
-                'provider_connection_failed',
-                'The AI provider could not be reached. The request was not retried automatically.',
-            );
-        } catch (ProviderException $exception) {
-            throw $exception;
-        } catch (Throwable) {
-            throw new ProviderException(
-                'provider_request_failed',
-                'The AI provider request failed.',
-            );
+        while (true) {
+            try {
+                $response = $this->sendRequest(
+                    $attempt === 1 ? $prompt : $this->structuredResponseRetryPrompt($prompt),
+                );
+
+                if (! $response->successful()) {
+                    $code = match ($response->status()) {
+                        401, 403 => 'provider_authentication_failed',
+                        429 => 'provider_rate_limited',
+                        default => $response->serverError()
+                            ? 'provider_unavailable'
+                            : 'provider_rejected_request',
+                    };
+
+                    throw new ProviderException($code, 'The AI provider rejected the request.');
+                }
+
+                $text = $response->json('candidates.0.content.parts.0.text');
+
+                if (! is_string($text) || $text === '') {
+                    throw new ProviderException(
+                        'provider_empty_response',
+                        'The AI provider returned no structured response.',
+                    );
+                }
+
+                $validated = $this->responseValidator->validate($text);
+                $requestId = $response->json('responseId');
+
+                return [
+                    ...$validated,
+                    'request_id' => is_string($requestId) ? $requestId : null,
+                ];
+            } catch (ConnectionException) {
+                throw new ProviderException(
+                    'provider_connection_failed',
+                    'The AI provider could not be reached. The request was not retried automatically.',
+                );
+            } catch (ProviderException $exception) {
+                if (! $this->shouldRetryStructuredResponse($exception, $attempt)) {
+                    throw $exception;
+                }
+
+                $attempt++;
+            } catch (Throwable) {
+                throw new ProviderException(
+                    'provider_request_failed',
+                    'The AI provider request failed.',
+                );
+            }
         }
+    }
 
-        if (! $response->successful()) {
-            $code = match ($response->status()) {
-                401, 403 => 'provider_authentication_failed',
-                429 => 'provider_rate_limited',
-                default => $response->serverError()
-                    ? 'provider_unavailable'
-                    : 'provider_rejected_request',
-            };
-
-            throw new ProviderException($code, 'The AI provider rejected the request.');
-        }
-
-        $text = $response->json('candidates.0.content.parts.0.text');
-
-        if (! is_string($text) || $text === '') {
-            throw new ProviderException(
-                'provider_empty_response',
-                'The AI provider returned no structured response.',
+    private function shouldRetryStructuredResponse(
+        ProviderException $exception,
+        int $attempt,
+    ): bool {
+        return $attempt < self::MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS
+            && in_array(
+                $exception->failureCode,
+                self::RETRYABLE_STRUCTURED_RESPONSE_FAILURES,
+                true,
             );
-        }
+    }
 
-        $validated = $this->responseValidator->validate($text);
-        $requestId = $response->json('responseId');
-
+    /**
+     * @param  array{system: string, user: string}  $prompt
+     * @return array{system: string, user: string}
+     */
+    private function structuredResponseRetryPrompt(array $prompt): array
+    {
         return [
-            ...$validated,
-            'request_id' => is_string($requestId) ? $requestId : null,
+            'system' => $prompt['system'],
+            'user' => $prompt['user']."\n\n".implode(' ', [
+                'The previous response could not be accepted.',
+                'Return one complete JSON object matching the response schema.',
+                'Do not use Markdown fences or add surrounding text.',
+            ]),
         ];
     }
 

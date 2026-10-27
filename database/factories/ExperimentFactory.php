@@ -25,6 +25,8 @@ class ExperimentFactory extends Factory
             'status' => ExperimentStatus::Pending,
             'provider' => 'fake',
             'model' => 'deterministic-local',
+            'sender_instructions' => null,
+            'receiver_instructions' => null,
             'max_turns' => 3,
             'current_turn' => 0,
         ];

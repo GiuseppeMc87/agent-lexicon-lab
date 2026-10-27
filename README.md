@@ -161,26 +161,26 @@ Every file changed on the feature branch was inspected. Base-branch context was 
 
 Every risk requested for review was checked and classified. None remained uncertain.
 
-| Risk | Classification | Clean-room response |
-| --- | --- | --- |
-| A migration reads `token_key` before the column exists | Confirmed | Fresh final-state migrations are ordered by dependency. |
-| AI fields disagree between `dictionary`, `inferred_dictionary`, and `message_in_clear` | Confirmed | Sender and receiver use explicit DTOs with one validated field schema. |
-| Turn polling omits vocabulary associated with newly returned messages | Confirmed | Polling uses message and event IDs and always returns the current vocabulary. |
-| Experiment endpoints lack authentication and ownership checks | Confirmed | Routes require authenticated, verified users and policies enforce ownership. |
-| Expensive execution lacks a dedicated throttle | Confirmed | Manual starts have a dedicated rate limiter. |
-| Provider and orchestration logic live in an oversized command | Confirmed | Provider, validation, orchestration, vocabulary, job, and command responsibilities are separate. |
-| Decoding performs unsafe substring replacement | Confirmed | Only exact, delimited `[[symbol]]` tokens are decoded, without cascading replacement. |
-| Paid execution runs every five minutes without cost controls | Confirmed | Paid execution and recurring scheduling have separate disabled-by-default flags. |
-| The feature has no automated tests | Confirmed | Backend, HTTP, database, command, job, schedule, fake-provider, and frontend checks were added. |
-| Tracked examples contain credential-like or identifying values | Confirmed | Only placeholders are present; provider credentials remain external. |
-| Active PHP and MySQL versions are obsolete for the new application | Confirmed | The new images pin PHP 8.5.12 and MySQL 8.4.13. |
-| Compose uses fixed container names | Confirmed | Compose-generated names are used. |
-| Compose requires an external network | Confirmed | The new project uses its default internal network. |
-| A mounted PHP configuration path is a directory instead of a file | Confirmed | Every referenced configuration file is committed with the correct type. |
-| Multiple versioned Docker directories are unused | Confirmed | One Dockerfile and one committed configuration tree define the new stack. |
-| Provider failures can leave experiments running | Confirmed | Exceptions transition the experiment to a terminal failed state with sanitized details. |
-| Raw provider output may be logged | Confirmed | Raw bodies, prompts, credentials, and authentication payloads are not logged. |
-| Vocabulary revisions are not concurrency-safe | Confirmed | Transactions, row locks, unique constraints, retry bounds, and overlap locks protect revision order. |
+| Risk                                                                                   | Classification | Clean-room response                                                                                  |
+| -------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
+| A migration reads `token_key` before the column exists                                 | Confirmed      | Fresh final-state migrations are ordered by dependency.                                              |
+| AI fields disagree between `dictionary`, `inferred_dictionary`, and `message_in_clear` | Confirmed      | Sender and receiver use explicit DTOs with one validated field schema.                               |
+| Turn polling omits vocabulary associated with newly returned messages                  | Confirmed      | Polling uses message and event IDs and always returns the current vocabulary.                        |
+| Experiment endpoints lack authentication and ownership checks                          | Confirmed      | Routes require authenticated, verified users and policies enforce ownership.                         |
+| Expensive execution lacks a dedicated throttle                                         | Confirmed      | Manual starts have a dedicated rate limiter.                                                         |
+| Provider and orchestration logic live in an oversized command                          | Confirmed      | Provider, validation, orchestration, vocabulary, job, and command responsibilities are separate.     |
+| Decoding performs unsafe substring replacement                                         | Confirmed      | Only exact, delimited `[[symbol]]` tokens are decoded, without cascading replacement.                |
+| Paid execution runs every five minutes without cost controls                           | Confirmed      | Paid execution and recurring scheduling have separate disabled-by-default flags.                     |
+| The feature has no automated tests                                                     | Confirmed      | Backend, HTTP, database, command, job, schedule, fake-provider, and frontend checks were added.      |
+| Tracked examples contain credential-like or identifying values                         | Confirmed      | Only placeholders are present; provider credentials remain external.                                 |
+| Active PHP and MySQL versions are obsolete for the new application                     | Confirmed      | The new images pin PHP 8.5.12 and MySQL 8.4.13.                                                      |
+| Compose uses fixed container names                                                     | Confirmed      | Compose-generated names are used.                                                                    |
+| Compose requires an external network                                                   | Confirmed      | The new project uses its default internal network.                                                   |
+| A mounted PHP configuration path is a directory instead of a file                      | Confirmed      | Every referenced configuration file is committed with the correct type.                              |
+| Multiple versioned Docker directories are unused                                       | Confirmed      | One Dockerfile and one committed configuration tree define the new stack.                            |
+| Provider failures can leave experiments running                                        | Confirmed      | Exceptions transition the experiment to a terminal failed state with sanitized details.              |
+| Raw provider output may be logged                                                      | Confirmed      | Raw bodies, prompts, credentials, and authentication payloads are not logged.                        |
+| Vocabulary revisions are not concurrency-safe                                          | Confirmed      | Transactions, row locks, unique constraints, retry bounds, and overlap locks protect revision order. |
 
 Unrelated recruitment, content, profile, course, payment, currency, OAuth-server, legacy frontend, private infrastructure, branding, prompts, identifiers, and Git history were excluded.
 
@@ -260,16 +260,16 @@ Final container results:
 
 All Composer, Artisan, and PHP verification commands ran inside the application container. No automated test makes a billable AI call.
 
-| Command | Result |
-| --- | --- |
-| `composer test` | Passed Pint on 109 PHP files, PHPStan with zero errors, and 75 tests with 267 assertions. |
-| `php artisan test --compact` | 75 tests passed with 267 assertions. |
-| `npm run check` | 76 files correctly formatted; 67 files had no lint warnings or errors. |
-| `npm run types:check` | Passed with no TypeScript errors. |
-| `npm run build` | Passed; 2,337 modules transformed and a production manifest was generated. |
-| `composer audit --no-interaction` | No security vulnerability advisories found. |
-| `npm audit --audit-level=high` | Zero vulnerabilities found. |
-| Editor diagnostics | No errors found. |
+| Command                           | Result                                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| `composer test`                   | Passed Pint on 109 PHP files, PHPStan with zero errors, and 75 tests with 267 assertions. |
+| `php artisan test --compact`      | 75 tests passed with 267 assertions.                                                      |
+| `npm run check`                   | 76 files correctly formatted; 67 files had no lint warnings or errors.                    |
+| `npm run types:check`             | Passed with no TypeScript errors.                                                         |
+| `npm run build`                   | Passed; 2,337 modules transformed and a production manifest was generated.                |
+| `composer audit --no-interaction` | No security vulnerability advisories found.                                               |
+| `npm audit --audit-level=high`    | Zero vulnerabilities found.                                                               |
+| Editor diagnostics                | No errors found.                                                                          |
 
 Test coverage includes fresh migrations, lifecycle transitions, strict response validation, vocabulary creation and revision, revision locking, append-only events, exact token decoding, message/revision relationships, authorization, index and detail pages, ID cursors, missing experiments, job and command success/failure, disabled scheduling, overlap protection, HTTP-blocked provider fakes, frontend types, and production assets.
 
@@ -321,8 +321,7 @@ The source repository's tracked working tree and index remained clean. Its refs,
 
 The repository must remain private until these blockers are resolved and the public-readiness review is repeated from the final independent clone.
 
-
-
 ### Test account
+
 email: giuseppemuci87@gmail.com
 password: YUNTJ5b4wS@

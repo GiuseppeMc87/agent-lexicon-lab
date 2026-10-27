@@ -46,6 +46,8 @@ class ExperimentOrchestrator
                         maximumTurns: $experiment->max_turns,
                         messages: $messages,
                         vocabulary: $visibleVocabulary,
+                        roleInstructions: $experiment->sender_instructions
+                            ?? (string) config('agent.default_instructions.sender'),
                     ),
                 );
 
@@ -63,6 +65,8 @@ class ExperimentOrchestrator
                             ],
                         ],
                         vocabulary: $visibleVocabulary,
+                        roleInstructions: $experiment->receiver_instructions
+                            ?? (string) config('agent.default_instructions.receiver'),
                     ),
                 );
 

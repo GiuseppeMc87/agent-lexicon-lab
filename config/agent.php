@@ -9,6 +9,11 @@ return [
     'default_turns' => (int) env('AI_DEFAULT_TURNS', 3),
     'maximum_turns' => (int) env('AI_MAXIMUM_TURNS', 8),
 
+    'default_instructions' => [
+        'sender' => 'Create the next concise message. You may introduce or revise symbols when that makes the exchange more expressive.',
+        'receiver' => 'Interpret the sender message using only the supplied history and known vocabulary, then write a concise reply. Propose your inferred definition for any unfamiliar symbol.',
+    ],
+
     'fake' => [
         'model' => 'deterministic-local',
     ],

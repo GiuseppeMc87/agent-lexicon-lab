@@ -37,6 +37,10 @@ class ExperimentController extends Controller
                 'default_turns' => (int) config('agent.default_turns'),
                 'maximum_turns' => (int) config('agent.maximum_turns'),
             ],
+            'default_instructions' => [
+                'sender' => (string) config('agent.default_instructions.sender'),
+                'receiver' => (string) config('agent.default_instructions.receiver'),
+            ],
             'execution' => [
                 'provider' => config('agent.driver'),
                 'paid_enabled' => (bool) config('agent.paid_execution_enabled'),
@@ -54,6 +58,10 @@ class ExperimentController extends Controller
             'status' => ExperimentStatus::Pending,
             'provider' => $provider,
             'model' => (string) config("agent.{$provider}.model"),
+            'sender_instructions' => $data['sender_instructions']
+                ?? (string) config('agent.default_instructions.sender'),
+            'receiver_instructions' => $data['receiver_instructions']
+                ?? (string) config('agent.default_instructions.receiver'),
             'max_turns' => $data['max_turns'],
             'current_turn' => 0,
         ]);

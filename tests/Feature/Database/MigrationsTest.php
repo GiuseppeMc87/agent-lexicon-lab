@@ -19,6 +19,8 @@ class MigrationsTest extends TestCase
         $this->assertTrue(Schema::hasColumns('experiments', [
             'user_id',
             'status',
+            'sender_instructions',
+            'receiver_instructions',
             'max_turns',
             'failure_code',
         ]));

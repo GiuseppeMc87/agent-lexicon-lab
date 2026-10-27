@@ -31,23 +31,23 @@ The root source `docker-compose.yml` relies on the root `Dockerfile`, because it
 
 ## Risk verification matrix
 
-| Risk requested for verification | Classification | Local evidence |
-| --- | --- | --- |
-| Migration references `token_key` before creating it | Confirmed | The feature migration queries the column before the corrective migration adds it. |
-| Response fields disagree (`dictionary`, `inferred_dictionary`, `message_in_clear`) | Confirmed | Prompts, parsing, and consumed fields do not define one consistent contract. |
-| Polling omits vocabulary for newly returned messages | Confirmed | The turn cursor applies the previous turn boundary to vocabulary data. |
-| Experiment endpoints are unauthenticated | Confirmed | Feature API routes do not require authentication or ownership authorization. |
-| Throttling is insufficient | Confirmed | Only a broad 300 requests-per-minute API throttle was observed; costly execution has no dedicated limit. |
-| Orchestration and provider logic are concentrated in an oversized command | Confirmed | The feature command is 611 lines and owns authentication, HTTP, parsing, orchestration, and persistence. |
-| Token decoding uses unsafe substring replacement | Confirmed | Ordinary substrings and cascading replacements can be decoded unintentionally. |
-| Five-minute paid execution lacks cost controls | Confirmed | The recurring schedule is unconditional and has no paid-execution feature flag. |
-| Automated tests are missing | Confirmed | The feature branch adds no test file. |
-| Credential-like documentation or environment values exist | Confirmed | Tracked source examples contain non-placeholder, identifying, credential-like values. Values were not copied or printed. |
-| PHP or MySQL versions are obsolete for the new project | Confirmed | The active source images are PHP 8.1 and MySQL 5.7.22. |
-| Container names are hard coded | Confirmed | Every source Compose service declares a fixed container name. |
-| An external Docker network is mandatory | Confirmed | The shared network is declared `external: true`. |
-| Mounts reference missing or invalid file types | Confirmed | `php/local.ini` is mounted as a file but exists as a directory. |
-| Alternative Docker configurations are unused | Confirmed | None of the four versioned Docker directories is referenced by the active root Compose build. |
+| Risk requested for verification                                                    | Classification | Local evidence                                                                                                           |
+| ---------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Migration references `token_key` before creating it                                | Confirmed      | The feature migration queries the column before the corrective migration adds it.                                        |
+| Response fields disagree (`dictionary`, `inferred_dictionary`, `message_in_clear`) | Confirmed      | Prompts, parsing, and consumed fields do not define one consistent contract.                                             |
+| Polling omits vocabulary for newly returned messages                               | Confirmed      | The turn cursor applies the previous turn boundary to vocabulary data.                                                   |
+| Experiment endpoints are unauthenticated                                           | Confirmed      | Feature API routes do not require authentication or ownership authorization.                                             |
+| Throttling is insufficient                                                         | Confirmed      | Only a broad 300 requests-per-minute API throttle was observed; costly execution has no dedicated limit.                 |
+| Orchestration and provider logic are concentrated in an oversized command          | Confirmed      | The feature command is 611 lines and owns authentication, HTTP, parsing, orchestration, and persistence.                 |
+| Token decoding uses unsafe substring replacement                                   | Confirmed      | Ordinary substrings and cascading replacements can be decoded unintentionally.                                           |
+| Five-minute paid execution lacks cost controls                                     | Confirmed      | The recurring schedule is unconditional and has no paid-execution feature flag.                                          |
+| Automated tests are missing                                                        | Confirmed      | The feature branch adds no test file.                                                                                    |
+| Credential-like documentation or environment values exist                          | Confirmed      | Tracked source examples contain non-placeholder, identifying, credential-like values. Values were not copied or printed. |
+| PHP or MySQL versions are obsolete for the new project                             | Confirmed      | The active source images are PHP 8.1 and MySQL 5.7.22.                                                                   |
+| Container names are hard coded                                                     | Confirmed      | Every source Compose service declares a fixed container name.                                                            |
+| An external Docker network is mandatory                                            | Confirmed      | The shared network is declared `external: true`.                                                                         |
+| Mounts reference missing or invalid file types                                     | Confirmed      | `php/local.ini` is mounted as a file but exists as a directory.                                                          |
+| Alternative Docker configurations are unused                                       | Confirmed      | None of the four versioned Docker directories is referenced by the active root Compose build.                            |
 
 None of the requested risks remained uncertain after local inspection.
 

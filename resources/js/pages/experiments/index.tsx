@@ -18,6 +18,10 @@ type Props = {
         default_turns: number;
         maximum_turns: number;
     };
+    default_instructions: {
+        sender: string;
+        receiver: string;
+    };
     execution: {
         provider: string;
         paid_enabled: boolean;
@@ -27,6 +31,7 @@ type Props = {
 export default function ExperimentIndex({
     experiments,
     limits,
+    default_instructions: defaultInstructions,
     execution,
 }: Props) {
     return (
@@ -77,53 +82,139 @@ export default function ExperimentIndex({
                     <Form
                         {...store.form()}
                         resetOnSuccess
-                        className="grid gap-4 md:grid-cols-[1fr_12rem_auto] md:items-end"
+                        className="space-y-5"
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">
-                                        Experiment name
-                                    </Label>
-                                    <Input
-                                        id="name"
-                                        name="name"
-                                        required
-                                        maxLength={120}
-                                        placeholder="Negotiating navigation signals"
-                                        aria-invalid={Boolean(errors.name)}
-                                    />
-                                    <InputError message={errors.name} />
+                                <div className="grid gap-4 md:grid-cols-[1fr_12rem_auto] md:items-end">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="name">
+                                            Experiment name
+                                        </Label>
+                                        <Input
+                                            id="name"
+                                            name="name"
+                                            required
+                                            maxLength={120}
+                                            placeholder="Negotiating navigation signals"
+                                            aria-invalid={Boolean(errors.name)}
+                                        />
+                                        <InputError message={errors.name} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="max_turns">Turns</Label>
+                                        <select
+                                            id="max_turns"
+                                            name="max_turns"
+                                            defaultValue={limits.default_turns}
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                            aria-invalid={Boolean(
+                                                errors.max_turns,
+                                            )}
+                                        >
+                                            {Array.from(
+                                                {
+                                                    length: limits.maximum_turns,
+                                                },
+                                                (_, indexValue) =>
+                                                    indexValue + 1,
+                                            ).map((turns) => (
+                                                <option
+                                                    key={turns}
+                                                    value={turns}
+                                                >
+                                                    {turns}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError
+                                            message={errors.max_turns}
+                                        />
+                                    </div>
+
+                                    <Button disabled={processing}>
+                                        <Plus aria-hidden="true" />
+                                        {processing ? 'Creating…' : 'Create'}
+                                    </Button>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="max_turns">Turns</Label>
-                                    <select
-                                        id="max_turns"
-                                        name="max_turns"
-                                        defaultValue={limits.default_turns}
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                                        aria-invalid={Boolean(errors.max_turns)}
-                                    >
-                                        {Array.from(
-                                            { length: limits.maximum_turns },
-                                            (_, indexValue) => indexValue + 1,
-                                        ).map((turns) => (
-                                            <option key={turns} value={turns}>
-                                                {turns}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <InputError message={errors.max_turns} />
-                                </div>
+                                <details className="group rounded-xl border bg-muted/20 open:bg-muted/30">
+                                    <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium marker:hidden">
+                                        <span className="flex items-center justify-between gap-3">
+                                            Agent instructions
+                                            <span className="text-xs font-normal text-muted-foreground">
+                                                Optional
+                                            </span>
+                                        </span>
+                                    </summary>
+                                    <div className="grid gap-4 border-t p-4 md:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="sender_instructions">
+                                                Sender brief
+                                            </Label>
+                                            <textarea
+                                                id="sender_instructions"
+                                                name="sender_instructions"
+                                                rows={4}
+                                                maxLength={2000}
+                                                defaultValue={
+                                                    defaultInstructions.sender
+                                                }
+                                                placeholder="Example: Introduce spatial concepts gradually."
+                                                className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                                aria-invalid={Boolean(
+                                                    errors.sender_instructions,
+                                                )}
+                                            />
+                                            <p className="text-xs leading-5 text-muted-foreground">
+                                                Guides what the sender tries to
+                                                express.
+                                            </p>
+                                            <InputError
+                                                message={
+                                                    errors.sender_instructions
+                                                }
+                                            />
+                                        </div>
 
-                                <Button
-                                    disabled={processing}
-                                    className="md:mb-0"
-                                >
-                                    <Plus aria-hidden="true" />
-                                    {processing ? 'Creating…' : 'Create'}
-                                </Button>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="receiver_instructions">
+                                                Receiver brief
+                                            </Label>
+                                            <textarea
+                                                id="receiver_instructions"
+                                                name="receiver_instructions"
+                                                rows={4}
+                                                maxLength={2000}
+                                                defaultValue={
+                                                    defaultInstructions.receiver
+                                                }
+                                                placeholder="Example: Challenge ambiguous definitions before reusing them."
+                                                className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                                aria-invalid={Boolean(
+                                                    errors.receiver_instructions,
+                                                )}
+                                            />
+                                            <p className="text-xs leading-5 text-muted-foreground">
+                                                Guides how the receiver
+                                                interprets and replies.
+                                            </p>
+                                            <InputError
+                                                message={
+                                                    errors.receiver_instructions
+                                                }
+                                            />
+                                        </div>
+
+                                        <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
+                                            These briefs supplement the fixed
+                                            experiment protocol; they cannot
+                                            override symbol or response-format
+                                            rules.
+                                        </p>
+                                    </div>
+                                </details>
                             </>
                         )}
                     </Form>
