@@ -26,6 +26,22 @@ class ResponseValidatorTest extends TestCase
         $this->assertSame('the cool horizon marker', $response['vocabulary'][0]->meaning);
     }
 
+    public function test_normalizes_a_bracketed_vocabulary_symbol_from_the_provider(): void
+    {
+        $json = json_encode([
+            'message' => 'Follow [[north-signal]].',
+            'vocabulary' => [[
+                'symbol' => '[[north-signal]]',
+                'meaning' => 'the cool horizon marker',
+                'description' => null,
+            ]],
+        ], JSON_THROW_ON_ERROR);
+
+        $response = app(ResponseValidator::class)->validate($json);
+
+        $this->assertSame('north-signal', $response['vocabulary'][0]->symbol);
+    }
+
     public function test_rejects_malformed_json_without_storing_raw_output(): void
     {
         try {

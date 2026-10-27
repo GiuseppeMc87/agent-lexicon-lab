@@ -38,7 +38,7 @@ class ResponseValidator
         }
 
         if (is_array($decoded['vocabulary'] ?? null)) {
-            foreach ($decoded['vocabulary'] as $proposal) {
+            foreach ($decoded['vocabulary'] as $index => $proposal) {
                 if (! is_array($proposal) || array_is_list($proposal)) {
                     throw new ProviderException(
                         'invalid_vocabulary_shape',
@@ -50,6 +50,12 @@ class ResponseValidator
                     throw new ProviderException(
                         'unexpected_vocabulary_fields',
                         'The AI provider returned unexpected vocabulary fields.',
+                    );
+                }
+
+                if (is_string($proposal['symbol'] ?? null)) {
+                    $decoded['vocabulary'][$index]['symbol'] = $this->normalizeSymbol(
+                        $proposal['symbol'],
                     );
                 }
             }
@@ -92,5 +98,16 @@ class ResponseValidator
             'message' => trim($validated['message']),
             'vocabulary' => $proposals,
         ];
+    }
+
+    private function normalizeSymbol(string $symbol): string
+    {
+        $symbol = trim($symbol);
+
+        if (preg_match('/\A\[\[([a-z][a-z0-9-]*)\]\]\z/', $symbol, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return $symbol;
     }
 }
