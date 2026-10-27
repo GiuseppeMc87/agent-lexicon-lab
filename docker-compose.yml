@@ -1,0 +1,119 @@
+name: agent-lexicon-lab
+
+x-app-build: &app-build
+    context: .
+    dockerfile: Dockerfile
+    target: application
+    args:
+        APP_UID: '${APP_UID:-1000}'
+        APP_GID: '${APP_GID:-1000}'
+
+x-app-service: &app-service
+    build: *app-build
+    working_dir: /var/www/html
+    volumes:
+        - .:/var/www/html
+    environment:
+        HOME: /home/app
+        COMPOSER_HOME: /tmp/composer
+    restart: unless-stopped
+
+services:
+    app:
+        <<: *app-service
+        depends_on:
+            database:
+                condition: service_healthy
+        healthcheck:
+            test:
+                - CMD
+                - php
+                - -r
+                - "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"
+            interval: 5s
+            timeout: 3s
+            retries: 20
+            start_period: 10s
+
+    nginx:
+        image: nginx:1.28.3-alpine
+        ports:
+            - '127.0.0.1:${APP_PORT:-8080}:80'
+        volumes:
+            - .:/var/www/html:ro
+            - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+        depends_on:
+            app:
+                condition: service_healthy
+        healthcheck:
+            test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1/up']
+            interval: 10s
+            timeout: 3s
+            retries: 10
+        restart: unless-stopped
+
+    database:
+        image: mysql:8.4.13
+        ports:
+            - '127.0.0.1:${FORWARD_DB_PORT:-3307}:3306'
+        environment:
+            MYSQL_DATABASE: '${DB_DATABASE:-agent_lexicon_lab}'
+            MYSQL_USER: '${DB_USERNAME:-agent_lexicon}'
+            MYSQL_PASSWORD: '${DB_PASSWORD:?Set DB_PASSWORD in .env}'
+            MYSQL_ROOT_PASSWORD: '${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}'
+        command:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_0900_ai_ci
+        volumes:
+            - database-data:/var/lib/mysql
+        healthcheck:
+            test:
+                - CMD-SHELL
+                - 'mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent'
+            interval: 5s
+            timeout: 5s
+            retries: 30
+            start_period: 20s
+        restart: unless-stopped
+
+    frontend:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: frontend
+            args:
+                APP_UID: '${APP_UID:-1000}'
+                APP_GID: '${APP_GID:-1000}'
+        working_dir: /var/www/html
+        command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
+        ports:
+            - '127.0.0.1:${VITE_PORT:-5173}:5173'
+        volumes:
+            - .:/var/www/html
+        profiles: ['development']
+
+    queue:
+        <<: *app-service
+        command:
+            - php
+            - artisan
+            - queue:work
+            - database
+            - --sleep=2
+            - --tries=3
+            - --timeout=900
+            - --max-time=3600
+        depends_on:
+            database:
+                condition: service_healthy
+        stop_grace_period: 30s
+
+    scheduler:
+        <<: *app-service
+        command: ['php', 'artisan', 'schedule:work']
+        depends_on:
+            database:
+                condition: service_healthy
+
+volumes:
+    database-data:
