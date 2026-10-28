@@ -1,7 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import {
-    ArrowDown,
     ArrowLeft,
+    ArrowUp,
     BookOpenText,
     Clock3,
     Copy,
@@ -661,7 +661,7 @@ export default function ExperimentShow({
         }
 
         conversation.scrollTo({
-            top: conversation.scrollHeight,
+            top: 0,
             behavior:
                 currentMessages.length === messages.length ? 'auto' : 'smooth',
         });
@@ -677,9 +677,17 @@ export default function ExperimentShow({
             ]);
         }
 
-        return Array.from(groups.entries()).sort(
-            ([firstTurn], [secondTurn]) => firstTurn - secondTurn,
-        );
+        return Array.from(groups.entries())
+            .sort(([firstTurn], [secondTurn]) => secondTurn - firstTurn)
+            .map(
+                ([turn, turnMessages]) =>
+                    [
+                        turn,
+                        [...turnMessages].sort(
+                            (first, second) => second.id - first.id,
+                        ),
+                    ] as const,
+            );
     }, [currentMessages]);
 
     const progress = Math.round(
@@ -693,13 +701,9 @@ export default function ExperimentShow({
             return;
         }
 
-        const isNearBottom =
-            conversation.scrollHeight -
-                conversation.scrollTop -
-                conversation.clientHeight <
-            96;
-        shouldFollowLatestRef.current = isNearBottom;
-        setShowJumpToLatest(!isNearBottom);
+        const isNearTop = conversation.scrollTop < 96;
+        shouldFollowLatestRef.current = isNearTop;
+        setShowJumpToLatest(!isNearTop);
     };
 
     const jumpToLatest = () => {
@@ -712,7 +716,7 @@ export default function ExperimentShow({
         shouldFollowLatestRef.current = true;
         setShowJumpToLatest(false);
         conversation.scrollTo({
-            top: conversation.scrollHeight,
+            top: 0,
             behavior: 'smooth',
         });
     };
@@ -979,6 +983,14 @@ export default function ExperimentShow({
                                     </div>
                                 ) : (
                                     <>
+                                        {composingRole !== null && (
+                                            <div className="mb-3">
+                                                <ComposingIndicator
+                                                    role={composingRole}
+                                                />
+                                            </div>
+                                        )}
+
                                         {groupedMessages.length > 0 && (
                                             <ol className="flex flex-col gap-4">
                                                 {groupedMessages.map(
@@ -1102,13 +1114,6 @@ export default function ExperimentShow({
                                             </ol>
                                         )}
 
-                                        {composingRole !== null && (
-                                            <div className="mt-3">
-                                                <ComposingIndicator
-                                                    role={composingRole}
-                                                />
-                                            </div>
-                                        )}
                                     </>
                                 )}
                             </div>
@@ -1121,7 +1126,7 @@ export default function ExperimentShow({
                                     onClick={jumpToLatest}
                                     className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-background shadow-lg"
                                 >
-                                    <ArrowDown aria-hidden="true" />
+                                    <ArrowUp aria-hidden="true" />
                                     Jump to latest
                                 </Button>
                             )}
