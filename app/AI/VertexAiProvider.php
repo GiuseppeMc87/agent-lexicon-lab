@@ -17,11 +17,19 @@ use GuzzleHttp\Client;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Throwable;
 
 class VertexAiProvider implements AgentProvider
 {
-    private const int MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS = 2;
+    /** @var list<int> */
+    private const array RATE_LIMIT_RETRY_DELAYS_SECONDS = [2, 5, 10];
+
+    private const int MAXIMUM_RETRY_AFTER_SECONDS = 30;
+
+    private const int MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS = 3;
+
+    private const int MAXIMUM_STRUCTURED_RETRY_OUTPUT_TOKENS = 8192;
 
     /** @var list<string> */
     private const array RETRYABLE_STRUCTURED_RESPONSE_FAILURES = [
@@ -88,6 +96,7 @@ class VertexAiProvider implements AgentProvider
             try {
                 $response = $this->sendRequest(
                     $attempt === 1 ? $prompt : $this->structuredResponseRetryPrompt($prompt),
+                    $attempt,
                 );
 
                 if (! $response->successful()) {
@@ -169,7 +178,7 @@ class VertexAiProvider implements AgentProvider
     /**
      * @param  array{system: string, user: string}  $prompt
      */
-    private function sendRequest(array $prompt): Response
+    private function sendRequest(array $prompt, int $structuredResponseAttempt): Response
     {
         $project = (string) config('agent.vertex.project_id');
         $location = (string) config('agent.vertex.location');
@@ -209,8 +218,10 @@ class VertexAiProvider implements AgentProvider
                 'parts' => [['text' => $prompt['user']]],
             ]],
             'generationConfig' => [
-                'temperature' => (float) config('agent.vertex.temperature'),
-                'maxOutputTokens' => (int) config('agent.vertex.maximum_output_tokens'),
+                'temperature' => $structuredResponseAttempt === 1
+                    ? (float) config('agent.vertex.temperature')
+                    : 0.0,
+                'maxOutputTokens' => $this->maximumOutputTokens($structuredResponseAttempt),
                 'responseMimeType' => 'application/json',
                 'responseSchema' => $this->responseSchema(),
             ],
@@ -218,13 +229,43 @@ class VertexAiProvider implements AgentProvider
 
         $response = $request->post($url, $body);
 
-        if ($response->status() === 429) {
-            usleep(250_000);
+        foreach (self::RATE_LIMIT_RETRY_DELAYS_SECONDS as $fallbackDelay) {
+            if ($response->status() !== 429) {
+                return $response;
+            }
 
-            return $request->post($url, $body);
+            Sleep::for($this->rateLimitRetryDelay($response, $fallbackDelay))->seconds();
+            $response = $request->post($url, $body);
         }
 
         return $response;
+    }
+
+    private function maximumOutputTokens(int $structuredResponseAttempt): int
+    {
+        $configuredMaximum = max(1, (int) config('agent.vertex.maximum_output_tokens'));
+
+        if ($structuredResponseAttempt === 1) {
+            return $configuredMaximum;
+        }
+
+        $retryMaximum = min(
+            self::MAXIMUM_STRUCTURED_RETRY_OUTPUT_TOKENS,
+            $configuredMaximum * (1 << ($structuredResponseAttempt - 1)),
+        );
+
+        return max($configuredMaximum, $retryMaximum);
+    }
+
+    private function rateLimitRetryDelay(Response $response, int $fallbackDelay): int
+    {
+        $retryAfter = trim($response->header('Retry-After'));
+
+        if ($retryAfter === '' || ! ctype_digit($retryAfter)) {
+            return $fallbackDelay;
+        }
+
+        return max(1, min(self::MAXIMUM_RETRY_AFTER_SECONDS, (int) $retryAfter));
     }
 
     private function accessToken(): string

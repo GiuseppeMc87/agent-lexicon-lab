@@ -6,6 +6,7 @@ use App\AI\DTO\AgentContext;
 use App\AI\Exceptions\ProviderException;
 use App\AI\VertexAiProvider;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use ReflectionProperty;
 use Tests\TestCase;
 
@@ -42,19 +43,25 @@ class VertexAiProviderTest extends TestCase
         $this->assertSame('A valid retry.', $response->message);
         $this->assertSame('second-response', $response->requestId);
         Http::assertSentCount(2);
+        $requests = Http::recorded();
+        $this->assertSame(0.4, $requests[0][0]->data()['generationConfig']['temperature']);
+        $this->assertSame(2048, $requests[0][0]->data()['generationConfig']['maxOutputTokens']);
+        $this->assertSame(0.0, $requests[1][0]->data()['generationConfig']['temperature']);
+        $this->assertSame(4096, $requests[1][0]->data()['generationConfig']['maxOutputTokens']);
     }
 
-    public function test_throws_the_second_failure_when_both_structured_responses_are_malformed(): void
+    public function test_throws_after_all_structured_response_attempts_are_malformed(): void
     {
         Http::preventStrayRequests();
         Http::fakeSequence($this->endpoint())
             ->push($this->providerResponse('{not-json', 'first-response'))
-            ->push($this->providerResponse('{still-not-json', 'second-response'));
+            ->push($this->providerResponse('{still-not-json', 'second-response'))
+            ->push($this->providerResponse('{also-not-json', 'third-response'));
         $provider = $this->providerWithCachedAccessToken();
 
         try {
             $provider->generateSenderResponse($this->context());
-            $this->fail('A second malformed response was accepted.');
+            $this->fail('An exhausted malformed response was accepted.');
         } catch (ProviderException $exception) {
             $this->assertSame('malformed_json', $exception->failureCode);
             $this->assertSame(
@@ -63,7 +70,9 @@ class VertexAiProviderTest extends TestCase
             );
         }
 
-        Http::assertSentCount(2);
+        Http::assertSentCount(3);
+        $requests = Http::recorded();
+        $this->assertSame(8192, $requests[2][0]->data()['generationConfig']['maxOutputTokens']);
     }
 
     public function test_does_not_retry_an_authentication_failure(): void
@@ -81,6 +90,59 @@ class VertexAiProviderTest extends TestCase
         }
 
         Http::assertSentCount(1);
+    }
+
+    public function test_retries_rate_limits_with_backoff_until_a_request_succeeds(): void
+    {
+        Http::preventStrayRequests();
+        Sleep::fake();
+        Http::fakeSequence($this->endpoint())
+            ->push(['error' => ['message' => 'Rate limited']], 429)
+            ->push(
+                ['error' => ['message' => 'Rate limited']],
+                429,
+                ['Retry-After' => '7'],
+            )
+            ->push($this->providerResponse(json_encode([
+                'message' => 'Recovered after backoff.',
+                'vocabulary' => [],
+            ], JSON_THROW_ON_ERROR), 'rate-limit-recovery'));
+        $provider = $this->providerWithCachedAccessToken();
+
+        $response = $provider->generateSenderResponse($this->context());
+
+        $this->assertSame('Recovered after backoff.', $response->message);
+        Http::assertSentCount(3);
+        Sleep::assertSequence([
+            Sleep::for(2)->seconds(),
+            Sleep::for(7)->seconds(),
+        ]);
+    }
+
+    public function test_throws_after_the_rate_limit_retry_budget_is_exhausted(): void
+    {
+        Http::preventStrayRequests();
+        Sleep::fake();
+        Http::fakeSequence($this->endpoint())
+            ->push(['error' => ['message' => 'Rate limited']], 429)
+            ->push(['error' => ['message' => 'Rate limited']], 429)
+            ->push(['error' => ['message' => 'Rate limited']], 429)
+            ->push(['error' => ['message' => 'Rate limited']], 429);
+        $provider = $this->providerWithCachedAccessToken();
+
+        try {
+            $provider->generateSenderResponse($this->context());
+            $this->fail('An exhausted rate-limit response was accepted.');
+        } catch (ProviderException $exception) {
+            $this->assertSame('provider_rate_limited', $exception->failureCode);
+        }
+
+        Http::assertSentCount(4);
+        Sleep::assertSequence([
+            Sleep::for(2)->seconds(),
+            Sleep::for(5)->seconds(),
+            Sleep::for(10)->seconds(),
+        ]);
     }
 
     private function providerWithCachedAccessToken(): VertexAiProvider
