@@ -87,4 +87,26 @@ class ResponseValidatorTest extends TestCase
             $this->assertSame('response_validation_failed', $exception->failureCode);
         }
     }
+
+    public function test_rejects_more_than_twenty_vocabulary_proposals(): void
+    {
+        $json = json_encode([
+            'message' => 'Reply',
+            'vocabulary' => array_map(
+                fn (int $index): array => [
+                    'symbol' => 'symbol-'.$index,
+                    'meaning' => 'Meaning '.$index,
+                    'description' => null,
+                ],
+                range(1, 21),
+            ),
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            app(ResponseValidator::class)->validate($json);
+            $this->fail('A response with more than twenty proposals was accepted.');
+        } catch (ProviderException $exception) {
+            $this->assertSame('response_validation_failed', $exception->failureCode);
+        }
+    }
 }

@@ -9,6 +9,14 @@ use JsonException;
 
 class ResponseValidator
 {
+    public const int MAXIMUM_MESSAGE_CHARACTERS = 4000;
+
+    public const int MAXIMUM_VOCABULARY_PROPOSALS = 20;
+
+    public const int MAXIMUM_SYMBOL_CHARACTERS = 64;
+
+    public const int MAXIMUM_VOCABULARY_TEXT_CHARACTERS = 1000;
+
     /**
      * @return array{message: string, vocabulary: list<VocabularyProposal>}
      */
@@ -62,17 +70,33 @@ class ResponseValidator
         }
 
         $validator = Validator::make($decoded, [
-            'message' => ['required', 'string', 'max:4000'],
-            'vocabulary' => ['present', 'array', 'max:20'],
+            'message' => [
+                'required',
+                'string',
+                'max:'.self::MAXIMUM_MESSAGE_CHARACTERS,
+            ],
+            'vocabulary' => [
+                'present',
+                'array',
+                'max:'.self::MAXIMUM_VOCABULARY_PROPOSALS,
+            ],
             'vocabulary.*.symbol' => [
                 'required',
                 'string',
-                'max:64',
+                'max:'.self::MAXIMUM_SYMBOL_CHARACTERS,
                 'regex:/\A[a-z][a-z0-9-]*\z/',
                 'distinct',
             ],
-            'vocabulary.*.meaning' => ['required', 'string', 'max:1000'],
-            'vocabulary.*.description' => ['nullable', 'string', 'max:1000'],
+            'vocabulary.*.meaning' => [
+                'required',
+                'string',
+                'max:'.self::MAXIMUM_VOCABULARY_TEXT_CHARACTERS,
+            ],
+            'vocabulary.*.description' => [
+                'nullable',
+                'string',
+                'max:'.self::MAXIMUM_VOCABULARY_TEXT_CHARACTERS,
+            ],
         ]);
 
         if ($validator->fails()) {

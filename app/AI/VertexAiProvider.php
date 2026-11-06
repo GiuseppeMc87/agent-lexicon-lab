@@ -170,6 +170,18 @@ class VertexAiProvider implements AgentProvider
             'user' => $prompt['user']."\n\n".implode(' ', [
                 'The previous response could not be accepted.',
                 'Return one complete JSON object matching the response schema.',
+                sprintf(
+                    'The message must contain no more than %d characters.',
+                    ResponseValidator::MAXIMUM_MESSAGE_CHARACTERS,
+                ),
+                sprintf(
+                    'Vocabulary may contain at most %d unique objects and should include only introduced or deliberately revised symbols.',
+                    ResponseValidator::MAXIMUM_VOCABULARY_PROPOSALS,
+                ),
+                sprintf(
+                    'Each bare symbol must contain no more than %d characters and use only lowercase letters, digits, or hyphens.',
+                    ResponseValidator::MAXIMUM_SYMBOL_CHARACTERS,
+                ),
                 'Do not use Markdown fences or add surrounding text.',
             ]),
         ];
@@ -318,17 +330,46 @@ class VertexAiProvider implements AgentProvider
         return [
             'type' => 'OBJECT',
             'required' => ['message', 'vocabulary'],
+            'propertyOrdering' => ['message', 'vocabulary'],
             'properties' => [
-                'message' => ['type' => 'STRING'],
+                'message' => [
+                    'type' => 'STRING',
+                    'description' => sprintf(
+                        'The concise symbolic conversation message, containing at most %d characters.',
+                        ResponseValidator::MAXIMUM_MESSAGE_CHARACTERS,
+                    ),
+                ],
                 'vocabulary' => [
                     'type' => 'ARRAY',
+                    'description' => 'Only symbols introduced or deliberately revised in this response; omit unchanged known vocabulary.',
+                    'maxItems' => ResponseValidator::MAXIMUM_VOCABULARY_PROPOSALS,
                     'items' => [
                         'type' => 'OBJECT',
                         'required' => ['symbol', 'meaning', 'description'],
+                        'propertyOrdering' => ['symbol', 'meaning', 'description'],
                         'properties' => [
-                            'symbol' => ['type' => 'STRING'],
-                            'meaning' => ['type' => 'STRING'],
-                            'description' => ['type' => 'STRING', 'nullable' => true],
+                            'symbol' => [
+                                'type' => 'STRING',
+                                'description' => sprintf(
+                                    'A unique bare symbol of at most %d characters, starting with a lowercase letter and containing only lowercase letters, digits, or hyphens.',
+                                    ResponseValidator::MAXIMUM_SYMBOL_CHARACTERS,
+                                ),
+                            ],
+                            'meaning' => [
+                                'type' => 'STRING',
+                                'description' => sprintf(
+                                    'The plain-language meaning in at most %d characters.',
+                                    ResponseValidator::MAXIMUM_VOCABULARY_TEXT_CHARACTERS,
+                                ),
+                            ],
+                            'description' => [
+                                'type' => 'STRING',
+                                'nullable' => true,
+                                'description' => sprintf(
+                                    'The reason for the proposal in at most %d characters, or null.',
+                                    ResponseValidator::MAXIMUM_VOCABULARY_TEXT_CHARACTERS,
+                                ),
+                            ],
                         ],
                     ],
                 ],

@@ -48,6 +48,33 @@ class VertexAiProviderTest extends TestCase
         $this->assertSame(2048, $requests[0][0]->data()['generationConfig']['maxOutputTokens']);
         $this->assertSame(0.0, $requests[1][0]->data()['generationConfig']['temperature']);
         $this->assertSame(4096, $requests[1][0]->data()['generationConfig']['maxOutputTokens']);
+        $this->assertStringContainsString(
+            'Vocabulary may contain at most 20 unique objects',
+            $requests[1][0]->data()['contents'][0]['parts'][0]['text'],
+        );
+    }
+
+    public function test_constrains_the_provider_schema_to_twenty_vocabulary_proposals(): void
+    {
+        Http::preventStrayRequests();
+        Http::fakeSequence($this->endpoint())
+            ->push($this->providerResponse(json_encode([
+                'message' => 'A valid response.',
+                'vocabulary' => [],
+            ], JSON_THROW_ON_ERROR), 'valid-response'));
+        $provider = $this->providerWithCachedAccessToken();
+
+        $provider->generateSenderResponse($this->context());
+
+        Http::assertSentCount(1);
+        $request = Http::recorded()[0][0];
+        $schema = $request->data()['generationConfig']['responseSchema'];
+        $this->assertSame(20, $schema['properties']['vocabulary']['maxItems']);
+        $this->assertSame(['message', 'vocabulary'], $schema['propertyOrdering']);
+        $this->assertSame(
+            ['symbol', 'meaning', 'description'],
+            $schema['properties']['vocabulary']['items']['propertyOrdering'],
+        );
     }
 
     public function test_throws_after_all_structured_response_attempts_are_malformed(): void
