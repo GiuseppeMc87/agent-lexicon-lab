@@ -6,8 +6,12 @@ return [
     'schedule_enabled' => (bool) env('AI_SCHEDULE_ENABLED', false),
     'schedule_interval_minutes' => (int) env('AI_SCHEDULE_INTERVAL_MINUTES', 5),
     'scheduled_batch_size' => (int) env('AI_SCHEDULE_BATCH_SIZE', 3),
-    'default_turns' => (int) env('AI_DEFAULT_TURNS', 3),
-    'maximum_turns' => (int) env('AI_MAXIMUM_TURNS', 8),
+    'default_turns' => env('AI_DEFAULT_TURNS') === null || env('AI_DEFAULT_TURNS') === ''
+        ? null
+        : (int) env('AI_DEFAULT_TURNS'),
+    'maximum_turns' => env('AI_MAXIMUM_TURNS') === null || env('AI_MAXIMUM_TURNS') === ''
+        ? null
+        : (int) env('AI_MAXIMUM_TURNS'),
 
     'default_instructions' => [
         'sender' => 'Create the next concise message. You may introduce or revise symbols when that makes the exchange more expressive.',

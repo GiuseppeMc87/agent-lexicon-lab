@@ -11,7 +11,7 @@ final readonly class AgentContext
     public function __construct(
         public string $experimentName,
         public int $turn,
-        public int $maximumTurns,
+        public ?int $maximumTurns,
         public array $messages,
         public array $vocabulary,
         public ?string $roleInstructions = null,

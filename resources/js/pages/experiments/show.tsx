@@ -690,9 +690,11 @@ export default function ExperimentShow({
             );
     }, [currentMessages]);
 
-    const progress = Math.round(
-        (currentExperiment.current_turn / currentExperiment.max_turns) * 100,
-    );
+    const progress = currentExperiment.max_turns === null
+        ? null
+        : Math.round(
+              (currentExperiment.current_turn / currentExperiment.max_turns) * 100,
+          );
 
     const handleConversationScroll = () => {
         const conversation = conversationRef.current;
@@ -851,10 +853,12 @@ export default function ExperimentShow({
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <span>
-                                    Turn {currentExperiment.current_turn} of{' '}
-                                    {currentExperiment.max_turns}
+                                    Turn {currentExperiment.current_turn}{' '}
+                                    {currentExperiment.max_turns === null
+                                        ? '· unlimited'
+                                        : `of ${currentExperiment.max_turns}`}
                                 </span>
-                                <span>{progress}%</span>
+                                {progress !== null && <span>{progress}%</span>}
                             </div>
                             <div
                                 className="h-1.5 overflow-hidden rounded-full bg-muted"
@@ -862,12 +866,14 @@ export default function ExperimentShow({
                                 aria-label="Conversation progress"
                                 aria-valuemin={0}
                                 aria-valuemax={100}
-                                aria-valuenow={progress}
+                                aria-valuenow={progress ?? undefined}
                             >
-                                <div
-                                    className="h-full rounded-full bg-primary transition-[width] duration-500"
-                                    style={{ width: `${progress}%` }}
-                                />
+                                {progress !== null && (
+                                    <div
+                                        className="h-full rounded-full bg-primary transition-[width] duration-500"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                )}
                             </div>
                         </div>
                         <div className="flex gap-4 text-xs text-muted-foreground">

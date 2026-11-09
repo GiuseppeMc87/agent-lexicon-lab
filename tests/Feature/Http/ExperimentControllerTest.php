@@ -89,6 +89,47 @@ class ExperimentControllerTest extends TestCase
         );
     }
 
+    public function test_blank_max_turns_creates_an_unlimited_experiment(): void
+    {
+        config()->set('agent.maximum_turns', null);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('experiments.store'), [
+            'name' => 'Unlimited protocol',
+            'max_turns' => '',
+        ])->assertRedirect();
+
+        $this->assertNull(Experiment::query()->sole()->max_turns);
+    }
+
+    public function test_blank_max_turns_is_rejected_when_an_environment_limit_is_configured(): void
+    {
+        config()->set('agent.maximum_turns', 90);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('experiments.store'), [
+            'name' => 'Missing limit',
+            'max_turns' => '',
+        ])->assertSessionHasErrors([
+            'max_turns' => 'The max turns field is required.',
+        ]);
+
+        $this->assertDatabaseCount('experiments', 0);
+    }
+
+    public function test_max_turns_can_be_unlimited_when_no_environment_limit_is_configured(): void
+    {
+        config()->set('agent.maximum_turns', null);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('experiments.store'), [
+            'name' => 'Beyond the configured limit',
+            'max_turns' => 999,
+        ])->assertRedirect();
+
+        $this->assertSame(999, Experiment::query()->sole()->max_turns);
+    }
+
     public function test_invalid_payload_returns_validation_messages_and_creates_nothing(): void
     {
         config()->set('agent.maximum_turns', 8);

@@ -25,12 +25,14 @@ class StoreExperimentRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
-            'max_turns' => [
-                'required',
+            'max_turns' => array_filter([
+                config('agent.maximum_turns') === null ? 'nullable' : 'required',
                 'integer',
                 'min:1',
-                'max:'.config('agent.maximum_turns'),
-            ],
+                config('agent.maximum_turns') === null
+                    ? null
+                    : 'max:'.config('agent.maximum_turns'),
+            ]),
             'sender_instructions' => ['nullable', 'string', 'max:2000'],
             'receiver_instructions' => ['nullable', 'string', 'max:2000'],
         ];

@@ -34,8 +34,8 @@ class ExperimentController extends Controller
                 ->response()
                 ->getData(true),
             'limits' => [
-                'default_turns' => (int) config('agent.default_turns'),
-                'maximum_turns' => (int) config('agent.maximum_turns'),
+                'default_turns' => config('agent.default_turns'),
+                'maximum_turns' => config('agent.maximum_turns'),
             ],
             'default_instructions' => [
                 'sender' => (string) config('agent.default_instructions.sender'),

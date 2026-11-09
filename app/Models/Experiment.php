@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Auth;
  * @property string $model
  * @property string|null $sender_instructions
  * @property string|null $receiver_instructions
- * @property int $max_turns
+ * @property int|null $max_turns
  * @property int $current_turn
  * @property int $lock_version
  * @property Carbon|null $queued_at

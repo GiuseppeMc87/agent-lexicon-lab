@@ -15,8 +15,8 @@ import type { Experiment, Paginated } from '@/types';
 type Props = {
     experiments: Paginated<Experiment>;
     limits: {
-        default_turns: number;
-        maximum_turns: number;
+        default_turns: number | null;
+        maximum_turns: number | null;
     };
     default_instructions: {
         sender: string;
@@ -103,31 +103,34 @@ export default function ExperimentIndex({
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="max_turns">Turns</Label>
-                                        <select
+                                        <Label htmlFor="max_turns">
+                                            Turns
+                                            {limits.maximum_turns !== null && (
+                                                <span className="font-normal text-muted-foreground">
+                                                    {' '}
+                                                    (max {limits.maximum_turns})
+                                                </span>
+                                            )}
+                                        </Label>
+                                        <Input
                                             id="max_turns"
                                             name="max_turns"
-                                            defaultValue={limits.default_turns}
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                            type="number"
+                                            required={
+                                                limits.maximum_turns !== null
+                                            }
+                                            min={1}
+                                            max={limits.maximum_turns ?? undefined}
+                                            defaultValue={limits.default_turns ?? undefined}
+                                            placeholder={
+                                                limits.maximum_turns === null
+                                                    ? 'Unlimited'
+                                                    : 'Enter turns'
+                                            }
                                             aria-invalid={Boolean(
                                                 errors.max_turns,
                                             )}
-                                        >
-                                            {Array.from(
-                                                {
-                                                    length: limits.maximum_turns,
-                                                },
-                                                (_, indexValue) =>
-                                                    indexValue + 1,
-                                            ).map((turns) => (
-                                                <option
-                                                    key={turns}
-                                                    value={turns}
-                                                >
-                                                    {turns}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        />
                                         <InputError
                                             message={errors.max_turns}
                                         />
@@ -269,7 +272,7 @@ export default function ExperimentIndex({
                                             </dt>
                                             <dd className="font-medium">
                                                 {experiment.current_turn} /{' '}
-                                                {experiment.max_turns} turns
+                                                {experiment.max_turns ?? '∞'} turns
                                             </dd>
                                         </div>
                                         <div>

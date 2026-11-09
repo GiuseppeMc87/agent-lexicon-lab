@@ -34,7 +34,7 @@ class ExperimentOrchestrator
             $experiment->refresh();
             $this->assertProviderMatches($experiment);
 
-            while ($experiment->current_turn < $experiment->max_turns) {
+            while ($experiment->max_turns === null || $experiment->current_turn < $experiment->max_turns) {
                 $turn = $experiment->current_turn + 1;
                 $messages = $this->messageHistory($experiment);
                 $visibleVocabulary = $this->vocabulary->activeVocabulary($experiment);

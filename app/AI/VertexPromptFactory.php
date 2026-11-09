@@ -23,6 +23,7 @@ class VertexPromptFactory
                 'Use symbols inside message text only in the exact form [[symbol]].',
                 'In vocabulary objects, return symbol as its bare name without brackets.',
                 'Symbols must begin with a lowercase letter and contain only lowercase letters, digits, or hyphens.',
+                'A null maximum_turns value means the experiment has no configured turn limit.',
                 sprintf(
                     'The vocabulary array may contain at most %d objects. Include only symbols you introduce or deliberately revise; do not copy known vocabulary unchanged.',
                     ResponseValidator::MAXIMUM_VOCABULARY_PROPOSALS,

@@ -65,6 +65,49 @@ class ExperimentOrchestratorTest extends TestCase
         $this->assertSame(2, $receiver->vocabularyRevisions()->value('version'));
     }
 
+    public function test_unlimited_experiment_passes_an_unlimited_context_to_the_provider(): void
+    {
+        $provider = new class implements AgentProvider
+        {
+            public ?int $maximumTurns = 0;
+
+            public function name(): string
+            {
+                return 'fake';
+            }
+
+            public function model(): string
+            {
+                return 'unlimited-spy';
+            }
+
+            public function generateSenderResponse(AgentContext $context): SenderResponse
+            {
+                $this->maximumTurns = $context->maximumTurns;
+
+                throw new ProviderException('stop_test', 'Stop after inspecting the context.');
+            }
+
+            public function generateReceiverResponse(AgentContext $context): ReceiverResponse
+            {
+                throw new LogicException('Receiver should not be called.');
+            }
+        };
+        $this->app->instance(AgentProvider::class, $provider);
+        $experiment = Experiment::factory()->create([
+            'model' => 'unlimited-spy',
+            'max_turns' => null,
+        ]);
+
+        try {
+            app(ExperimentOrchestrator::class)->run($experiment);
+        } catch (ProviderException $exception) {
+            $this->assertSame('stop_test', $exception->failureCode);
+        }
+
+        $this->assertNull($provider->maximumTurns);
+    }
+
     public function test_receiver_cannot_see_vocabulary_proposed_by_sender_in_same_turn(): void
     {
         $provider = new class implements AgentProvider

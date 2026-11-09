@@ -8,7 +8,7 @@ export type Experiment = {
     model: string;
     sender_instructions: string | null;
     receiver_instructions: string | null;
-    max_turns: number;
+    max_turns: number | null;
     current_turn: number;
     queued_at: string | null;
     started_at: string | null;
