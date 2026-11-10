@@ -71,8 +71,8 @@ The long-term research target is not merely to abbreviate English messages or bu
 user's natural language
     -> 1. semantic compiler
     -> compact typed symbols
-    -> 2. domain, jurisdiction, date, task, and risk router
-    -> 3. small specialist model + authoritative versioned knowledge
+    -> 2. domain, jurisdiction, date, task, and risk router + matter plan
+    -> 3. orchestrated micro-agent team + authoritative versioned knowledge
     -> typed semantic answer with evidence and confidence
     -> 4. deterministic target-language renderer
     -> 5. optional constrained readability model
@@ -80,10 +80,32 @@ user's natural language
 ```
 
 1. **Semantic compiler:** The language-specific front end identifies entities, relationships, actions, time, quantities, negation, certainty, responsibility, and conditions, then emits a canonical typed representation. Exact dictionary or `str_replace`-style substitution is a useful fast path only after the intended meaning is known. Raw word replacement alone changes the alphabet but preserves ambiguity, grammar, and word order. Compact symbols should be native tokens in the specialist model's tokenizer; visually short strings are not necessarily token-efficient. Grammar-based interlingua research demonstrates reversible language-specific parsing and generation through shared abstract syntax, particularly in controlled domains. [Grammatical Framework](https://aclanthology.org/2020.cl-2.6/)
-2. **Router:** A typed policy or small routing model selects the domain, jurisdiction, effective date, task, risk level, required sources, and one or more specialists. Deterministic rules should handle known cases; learned routing should handle ambiguous cases with confidence, abstention, and escalation. Routing research shows that model selection can reduce cost, but incorrect routing remains a first-class failure mode. [RouteLLM](https://arxiv.org/abs/2406.18665)
-3. **Specialist:** A small model is trained to reason over the compact language for a bounded domain and jurisdiction. It should retrieve authoritative, versioned sources rather than rely only on memorised law, policy, or procedure, and it should return typed conclusions, supporting evidence, effective dates, and confidence. The specialist does not need to understand every natural language or unrelated domain directly.
+2. **Router and matter orchestrator:** A typed policy or small routing model selects the domain, jurisdiction, effective date, task, risk level, required sources, and one or more specialists. The orchestrator converts the request into a shared objective and matter plan, assigns bounded tasks, records dependencies, and synthesises only verified outputs. Deterministic rules should handle known cases; learned routing should handle ambiguous cases with confidence, abstention, and escalation. Routing research shows that model selection can reduce cost, but incorrect routing remains a first-class failure mode. [RouteLLM](https://arxiv.org/abs/2406.18665)
+3. **Collaborative specialist team:** The router may call one small expert or assemble several micro-agents, each trained for a bounded responsibility and operating on the compact language. Each agent retrieves authoritative, versioned sources rather than relying only on memorised law, policy, or procedure, and returns typed conclusions, supporting evidence, effective dates, and confidence. Agents do not need to understand every natural language or unrelated domain directly.
 4. **Deterministic renderer:** A grammar- and template-driven decoder converts the typed result into the target language while preserving entities, dates, quantities, conditions, responsibility, legal modality, uncertainty, and citations. It should not reinterpret the specialist's conclusion.
 5. **Constrained readability model:** This optional model improves fluency only. It must not add, remove, or alter claims and should be followed by a semantic consistency check. Where deterministic rendering is sufficiently natural, this stage should be omitted to reduce cost and risk.
+
+#### Legal matter team example
+
+Jurisdictional separation is a routing boundary, not a one-agent limit. A legal matter can be handled like a large firm's matter team:
+
+- a **legislation-in-force agent** retrieves statutes and regulations, geographical extent, commencement, amendments, and the point-in-time text applicable to the matter;
+- a **precedent and application agent** retrieves analogous judgments and separates binding holdings from obiter, factual analogy, exceptions, and adverse treatment;
+- a **facts and evidence agent** creates a provenance-backed chronology, distinguishes alleged, admitted, and proved facts, and identifies missing evidence and burdens;
+- a **procedure and remedies agent** checks forum, deadlines, required steps, available remedies, and local procedural rules;
+- opposing **claimant/applicant and defendant/respondent agents** construct the strongest grounded arguments and identify adverse authority or distinguishing facts;
+- an independent **verification agent** checks every material claim against its source, provision or paragraph, jurisdiction, authority level, operative date, and later treatment, and can veto unsupported synthesis;
+- the **matter orchestrator** reconciles verified findings against the shared objective without inventing a new legal conclusion. A qualified lawyer remains the final decision-maker.
+
+For an England-and-Wales implementation, the legislation agent should consume official point-in-time legislation and effects data from [legislation.gov.uk](https://www.legislation.gov.uk/openapi), while the case-law agent should use approved judgments and metadata from [The National Archives Find Case Law](https://caselaw.nationalarchives.gov.uk/about-find-case-law). The equivalent authoritative services should be selected for every supported jurisdiction.
+
+New law should normally update the evidence layer, not trigger nightly model-weight retraining. A safer update pipeline is: pull official sources; store immutable snapshots and checksums; normalise them into a versioned legal graph or index; run change, citation, and regression checks; obtain human review for high-impact changes; and publish the new evidence snapshot atomically. Periodic retraining or fine-tuning can improve reasoning and tool use after curated evaluation, but embedding every legal change into weights is harder to audit, reproduce, and roll back.
+
+Case relevance should not be learned from arbitrary repetition weights. Ranking should expose legally meaningful factors such as jurisdiction, court hierarchy and binding status, operative date, subsequent treatment, cited provision, procedural posture, and factual similarity. A separate agent should actively search for contrary, distinguished, or overruled authority.
+
+Early legal-agent research supports multiple perspectives but does not prove that every agent team is superior. One study found comparable aggregate performance with distinct answers and cases solved by multi-agent methods that monolithic baselines missed, and vice versa; another reflective specialist design improved abstention and reduced fabricated or misattributed factors in its tested scenarios. [Investigating Multi-Agent Deliberation in Law](https://arxiv.org/abs/2606.30906), [Reflective Multi-Agent Legal Argument Generation](https://arxiv.org/abs/2506.02992)
+
+Multiple role prompts using the same underlying model are not automatically independent experts: they may repeat or amplify the same error. Agents therefore need separate evidence scopes, typed contracts, independent retrieval, an adversarial challenge round, and a verifier with authority to block synthesis. The complete team must be compared with a single-agent baseline on accuracy, unsupported-claim rate, routing error, latency, compute, energy, and human-review time.
 
 The encoders and renderers are the only components that require natural-language capability. Specialist reasoning models should learn the compact language from the beginning. The compact language must be compositional and typed rather than a collection of arbitrary abbreviations, and symbol definitions must be immutable within a version.
 
@@ -94,7 +116,7 @@ One general model spends capacity learning every supported language, domain, jur
 - **Specialisation can improve data and compute efficiency:** Branch-Train-Merge independently trained experts for domains including legal and scientific text. Its 64-domain, 22.4-billion-parameter aggregate matched a conventional Transformer trained with 2.5 times more compute, and the reported gains depended on genuine domain specialisation rather than random data splits. [Branch-Train-Merge](https://arxiv.org/abs/2208.03306)
 - **Task routing can produce smaller deployable networks:** Google's Task-level Mixture-of-Experts extracted per-task subnetworks instead of serving every expert for every request. In multilingual translation experiments it reported 1.9 times greater peak throughput across 30 language pairs and 2.6 times greater throughput at 200 language pairs while remaining competitive with token-level expert routing. [Task-level Mixture-of-Experts](https://research.google/pubs/beyond-distillation-task-level-mixture-of-experts-for-efficient-inference/)
 - **External routing can avoid unnecessary premium-model calls:** RouteLLM and FrugalGPT demonstrate that learned routing or cascades can choose between models according to task difficulty and cost. FrugalGPT reported matching its strongest individual model with substantially lower cost in its evaluated workloads, although those savings are benchmark- and pricing-dependent and must not be assumed for this project. [RouteLLM](https://arxiv.org/abs/2406.18665), [FrugalGPT](https://arxiv.org/abs/2305.05176)
-- **Jurisdictional separation can reduce irrelevant legal interference:** A model serving an England-and-Wales lawyer does not need every foreign legal system active for each query. However, narrower training does not itself guarantee truth. Research found large variations in legal-model performance across jurisdictions, courts, time periods, and cases, so authoritative retrieval, citations, effective dates, abstention, and professional review remain necessary. [Large Legal Fictions](https://arxiv.org/abs/2401.01301)
+- **Jurisdiction is a routing boundary, not a one-agent limit:** A legal request can activate a coordinated matter team for legislation-in-force, precedent, facts and evidence, procedure and remedies, adversarial analysis, and verification without activating every foreign legal system. The agents share one objective but retain bounded responsibilities and independent evidence checks. Narrower training still does not guarantee truth: legal-model performance varies across jurisdictions, courts, time periods, and cases, so authoritative retrieval, citations, effective dates, abstention, and professional review remain necessary. [Large Legal Fictions](https://arxiv.org/abs/2401.01301)
 - **Small experts may be deployable near the user:** Bounded specialist models are better candidates for customer-controlled or low-resource hardware, reducing network dependence and exposure of sensitive inputs. Whether a particular expert fits and performs adequately must be demonstrated on the target device, not inferred from parameter count alone. [MobileLLM](https://arxiv.org/abs/2402.14905)
 - **Experts can be updated independently:** A changed statute, medical protocol, or operational policy can update the relevant knowledge store or expert without retraining every language and unrelated domain. This is a proposed lifecycle advantage; experiments must measure update cost, compatibility, and regression risk.
 - **A shared semantic layer can remove repeated surface variation:** Multiple languages and phrasings can map to one operational meaning, allowing specialist training to focus on decisions and relationships rather than repeatedly learning every linguistic expression. The saving exists only if semantic compilation preserves the required meaning and the encoder, renderer, validation, and routing costs do not consume it.
@@ -107,10 +129,11 @@ An experiment is successful only if it demonstrates all of the following:
 
 - equivalent meaning survives encoding and decoding;
 - the router selects the correct domain, jurisdiction, effective date, task, and specialist, or safely abstains;
-- the specialist can complete the task using only the compact representation and authorised knowledge sources;
+- the selected specialist or micro-agent team can complete the task using only the compact representation and authorised knowledge sources;
+- collaboration improves the result after counting orchestration, duplicated work, verification, retries, and correlated-error risk;
 - the semantic answer retains evidence, provenance, uncertainty, and applicable dates;
 - the representation is smaller in actual model tokens, not merely visible characters;
-- the saving remains after counting compiler, router, specialist, renderer, optional readability model, vocabulary/schema, retrieval, validation, and fallback overhead;
+- the saving remains after counting compiler, router, every specialist agent, orchestration, renderer, optional readability model, vocabulary/schema, retrieval, validation, retries, and fallback overhead;
 - the result is cheaper or more efficient than direct multilingual processing without unacceptable latency or error increases.
 
 Experiments should begin with controlled, repetitive domains such as maintenance coordination before testing regulated domains. They must measure semantic fidelity, multilingual parity, routing accuracy, source-grounded task accuracy, token counts, latency, failure rate, and fallback behaviour. A symbolic conversation that is shorter on screen but changes a term's meaning is a failure, not a successful compression result.
@@ -123,7 +146,7 @@ If the approach achieves verified semantic fidelity and lower end-to-end cost, i
 
 #### Potential benefits and the conditions behind them
 
-- **Lower inference cost and GPU demand:** A smaller reasoning model and shorter effective context could reduce serving cost for high-volume repetitive workflows. This is a hypothesis to prove, not a consequence of shorter text alone: energy and latency depend on model size, sequence length, batching, quantisation, hardware, and serving strategy. [Energy Considerations of Large Language Model Inference](https://arxiv.org/abs/2504.17674) reports that system-level optimisation can materially change energy use, so this project must benchmark the complete stack.
+- **Lower compute, energy, cooling, and hardware demand:** If specialists achieve the required quality, routing work away from an oversized general model could reduce calculations, model-weight and KV-cache memory, accelerator count, electricity use, and cooling demand per resolved task. This is a hypothesis to prove, not a consequence of shorter text or parameter count alone: sequence length, batching, quantisation, utilisation, hardware, retries, and serving strategy all matter. [Energy Considerations of Large Language Model Inference](https://aclanthology.org/2025.acl-long.1563/) found that serving choices materially changed energy use in its tested workloads, so this project must benchmark the complete routed stack.
 - **Lower latency:** Fewer reasoning tokens and a smaller model may reduce prefill and decode time. The encoder, decoder, validation, and queueing overhead could offset that gain, so latency must be measured end to end at realistic concurrency.
 - **Private and on-premise deployment:** A compact domain model may fit more easily on customer-controlled infrastructure, reducing data transfer and cloud dependence. This is commercially valuable for hospitals, councils, financial services, and regulated organisations, but it does not remove the need to secure and update the encoder and decoder.
 - **One reasoning model for multiple languages:** Shared semantic representations could allow one domain model to serve several languages through language-specific adapters or encoders. Related multilingual research has demonstrated shared representation spaces and parameter reuse across many languages, but this project must prove parity for its own semantic language rather than assume it. [Google Universal Speech Model](https://arxiv.org/abs/2303.01037)
@@ -133,16 +156,44 @@ If the approach achieves verified semantic fidelity and lower end-to-end cost, i
 - **Licensing and platform revenue:** The licensable assets could include the semantic-language specification, encoders and decoders, domain ontologies, validators, evaluation suites, and compact reasoning models. A defensible product would sell measurable workflow outcomes and deployment controls, not merely a list of abbreviations.
 - **Infrastructure savings for AI providers:** If independent tests show lower total cost per successful task, providers could use the architecture to improve margins or offer cheaper plans. This claim requires production-like measurements and comparison with strong baselines including ordinary multilingual models, better tokenisers, caching, batching, quantisation, distillation, and semantic deduplication. [Deduplicating Training Data Makes Language Models Better](https://arxiv.org/abs/2107.06499)
 
+#### Environmental and physical-resource impact
+
+AI is physical infrastructure, not only software. The International Energy Agency estimated that data centres consumed about 415 terawatt-hours of electricity in 2024, around 1.5% of global electricity consumption, and projects roughly 945 terawatt-hours by 2030 in its base case. Accelerated servers, driven mainly by AI adoption, account for almost half of the projected increase. Cooling, storage, networking, power conversion, and backup infrastructure add to server demand. [IEA: Energy demand from AI](https://www.iea.org/reports/energy-and-ai/energy-demand-from-ai)
+
+Model size also creates a direct memory and accelerator burden. As an illustrative deployment calculation, AWS estimates that FP16 weights alone require approximately 14 GB for a 7-billion-parameter model and 140 GB for a 70-billion-parameter model, before KV cache, activations, framework overhead, and concurrency. Models that exceed one accelerator's memory require additional devices or model partitioning, increasing power, cooling, networking, and infrastructure requirements. [AWS: Right-sizing an inference system](https://docs.aws.amazon.com/prescriptive-guidance/latest/gen-ai-inference-architecture-and-best-practices-on-aws/right-sizing-and-auto-scaling.html)
+
+The environmental boundary extends beyond electricity:
+
+- data centres consume water directly for cooling and indirectly through electricity generation;
+- semiconductor fabrication consumes water and energy;
+- accelerators, servers, memory, cooling equipment, and grid infrastructure require minerals and manufactured materials;
+- rapid hardware replacement creates embodied emissions and electronic waste.
+
+The United Nations Environment Programme therefore recommends lifecycle assessment covering energy, water, mineral consumption, emissions, infrastructure production, and electronic waste rather than reporting training electricity alone. [UNEP: Environmental impact of the full AI lifecycle](https://wedocs.unep.org/handle/20.500.11822/46288)
+
+If specialists achieve equivalent task quality, activating a few small agents instead of one oversized general model could reduce calculations, resident model weights, KV-cache memory, accelerator count, electricity, and cooling per resolved task. At sufficient scale, avoiding or delaying additional accelerator capacity could also reduce semiconductor manufacturing, embodied carbon, water use, critical-material demand, and electronic waste. Task-specific smaller models have produced substantial energy reductions in controlled experiments, but those results are workload-specific rather than a guaranteed conversion from parameter count to energy. [UNESCO: Smarter, Smaller, Stronger](https://unesdoc.unesco.org/ark:/48223/pf0000394521)
+
+The micro-agent architecture can also increase consumption if it runs unnecessary agents in parallel, keeps many models resident, retries failed routes, retrains too frequently, or makes usage grow because each request becomes cheaper. Environmental improvement must therefore be measured for the complete system per successfully resolved task at equivalent quality, not inferred from the size of one component.
+
+Environmental experiments should report:
+
+- wall-socket kilowatt-hours for the compiler, router, every agent, retrieval, renderer, validation, retries, networking, and cooling;
+- GPU-seconds, accelerator count and utilisation, peak VRAM, system RAM, KV-cache memory, throughput, and latency;
+- direct cooling water and electricity-related water using location-specific factors;
+- location-based and market-based carbon-dioxide-equivalent emissions;
+- amortised training, development, hardware-manufacturing, and end-of-life impacts;
+- accuracy, unsupported-claim rate, and human-review time alongside every resource measurement.
+
 #### Commercial validation requirements
 
-The likely product is a multilingual semantic-computing platform: business communication is converted into a typed intermediate language, processed by a small domain model, checked for fidelity and contradictions, and returned in the user's language. The first commercial claim should remain narrow and measurable:
+The likely product is a multilingual semantic-computing platform: business communication is converted into a typed intermediate language, routed to one small specialist or an orchestrated micro-agent team, checked for fidelity and contradictions, and returned in the user's language. The first commercial claim should remain narrow and measurable:
 
 > For defined multilingual workflows, reduce total inference cost while preserving task meaning, operational accuracy, privacy, and auditability.
 
 Validation must compare the full pipeline against direct multilingual processing and report:
 
-- tokens, latency, memory, GPU utilisation, and energy per successful task;
-- encoder, reasoning, decoder, vocabulary/schema, validation, and fallback costs;
+- tokens, latency, peak VRAM and RAM, GPU-seconds, accelerator utilisation, wall-socket energy, water, and emissions per successful task;
+- compiler, router, every specialist agent, retrieval, renderer, vocabulary/schema, validation, retry, orchestration, and fallback costs;
 - semantic fidelity, multilingual parity, task accuracy, and high-risk error rates;
 - model-update, ontology-versioning, monitoring, and support costs;
 - whether the system remains useful when the input is ambiguous or outside the domain.
