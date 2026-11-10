@@ -52,6 +52,10 @@ class VertexAiProviderTest extends TestCase
             'Vocabulary may contain at most 20 unique objects',
             $requests[1][0]->data()['contents'][0]['parts'][0]['text'],
         );
+        $this->assertStringContainsString(
+            'Each meaning and description must contain no more than 1000 characters',
+            $requests[1][0]->data()['contents'][0]['parts'][0]['text'],
+        );
     }
 
     public function test_constrains_the_provider_schema_to_twenty_vocabulary_proposals(): void
@@ -83,7 +87,8 @@ class VertexAiProviderTest extends TestCase
         Http::fakeSequence($this->endpoint())
             ->push($this->providerResponse('{not-json', 'first-response'))
             ->push($this->providerResponse('{still-not-json', 'second-response'))
-            ->push($this->providerResponse('{also-not-json', 'third-response'));
+            ->push($this->providerResponse('{also-not-json', 'third-response'))
+            ->push($this->providerResponse('{finally-not-json', 'fourth-response'));
         $provider = $this->providerWithCachedAccessToken();
 
         try {
@@ -97,9 +102,34 @@ class VertexAiProviderTest extends TestCase
             );
         }
 
-        Http::assertSentCount(3);
+        Http::assertSentCount(4);
         $requests = Http::recorded();
         $this->assertSame(8192, $requests[2][0]->data()['generationConfig']['maxOutputTokens']);
+        $this->assertSame(16384, $requests[3][0]->data()['generationConfig']['maxOutputTokens']);
+    }
+
+    public function test_throws_a_specific_failure_after_all_structured_responses_are_truncated(): void
+    {
+        Http::preventStrayRequests();
+        Http::fakeSequence($this->endpoint())
+            ->push($this->providerResponse('{"message":"first', 'first-response', 'MAX_TOKENS'))
+            ->push($this->providerResponse('{"message":"second', 'second-response', 'MAX_TOKENS'))
+            ->push($this->providerResponse('{"message":"third', 'third-response', 'MAX_TOKENS'))
+            ->push($this->providerResponse('{"message":"fourth', 'fourth-response', 'MAX_TOKENS'));
+        $provider = $this->providerWithCachedAccessToken();
+
+        try {
+            $provider->generateSenderResponse($this->context());
+            $this->fail('An exhausted truncated response was accepted.');
+        } catch (ProviderException $exception) {
+            $this->assertSame('provider_output_truncated', $exception->failureCode);
+            $this->assertSame(
+                'The AI provider response was truncated before the JSON object was complete.',
+                $exception->safeMessage,
+            );
+        }
+
+        Http::assertSentCount(4);
     }
 
     public function test_does_not_retry_an_authentication_failure(): void
@@ -196,11 +226,15 @@ class VertexAiProviderTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function providerResponse(string $text, string $responseId): array
-    {
+    private function providerResponse(
+        string $text,
+        string $responseId,
+        string $finishReason = 'STOP',
+    ): array {
         return [
             'responseId' => $responseId,
             'candidates' => [[
+                'finishReason' => $finishReason,
                 'content' => [
                     'parts' => [['text' => $text]],
                 ],

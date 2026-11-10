@@ -1,4 +1,9 @@
-export type ExperimentStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ExperimentStatus =
+    | 'pending'
+    | 'running'
+    | 'paused'
+    | 'completed'
+    | 'failed';
 
 export type Experiment = {
     id: number;

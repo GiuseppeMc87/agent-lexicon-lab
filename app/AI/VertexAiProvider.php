@@ -27,13 +27,14 @@ class VertexAiProvider implements AgentProvider
 
     private const int MAXIMUM_RETRY_AFTER_SECONDS = 30;
 
-    private const int MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS = 3;
+    private const int MAXIMUM_STRUCTURED_RESPONSE_ATTEMPTS = 4;
 
-    private const int MAXIMUM_STRUCTURED_RETRY_OUTPUT_TOKENS = 8192;
+    private const int MAXIMUM_STRUCTURED_RETRY_OUTPUT_TOKENS = 16384;
 
     /** @var list<string> */
     private const array RETRYABLE_STRUCTURED_RESPONSE_FAILURES = [
         'provider_empty_response',
+        'provider_output_truncated',
         'malformed_json',
         'invalid_response_shape',
         'unexpected_response_fields',
@@ -111,6 +112,13 @@ class VertexAiProvider implements AgentProvider
                     throw new ProviderException($code, 'The AI provider rejected the request.');
                 }
 
+                if ($response->json('candidates.0.finishReason') === 'MAX_TOKENS') {
+                    throw new ProviderException(
+                        'provider_output_truncated',
+                        'The AI provider response was truncated before the JSON object was complete.',
+                    );
+                }
+
                 $text = $response->json('candidates.0.content.parts.0.text');
 
                 if (! is_string($text) || $text === '') {
@@ -181,6 +189,10 @@ class VertexAiProvider implements AgentProvider
                 sprintf(
                     'Each bare symbol must contain no more than %d characters and use only lowercase letters, digits, or hyphens.',
                     ResponseValidator::MAXIMUM_SYMBOL_CHARACTERS,
+                ),
+                sprintf(
+                    'Each meaning and description must contain no more than %d characters; keep both concise and use null for an unnecessary description.',
+                    ResponseValidator::MAXIMUM_VOCABULARY_TEXT_CHARACTERS,
                 ),
                 'Do not use Markdown fences or add surrounding text.',
             ]),

@@ -30,7 +30,10 @@ class ExperimentDispatcher
                 'lock_version' => $locked->lock_version + 1,
             ]);
 
-            RunExperiment::dispatch($locked->id)->afterCommit();
+            RunExperiment::dispatch(
+                $locked->id,
+                (int) config('agent.manual_run_turns'),
+            )->afterCommit();
 
             return true;
         });

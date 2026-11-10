@@ -97,6 +97,7 @@ class ExperimentController extends Controller
                 'event_id' => (int) ($experiment->vocabularyEvents->max('id') ?? 0),
             ],
             'poll_interval_ms' => 2500,
+            'manual_run_turns' => (int) config('agent.manual_run_turns'),
         ]);
     }
 }

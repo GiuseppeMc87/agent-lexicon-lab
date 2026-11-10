@@ -6,6 +6,7 @@ return [
     'schedule_enabled' => (bool) env('AI_SCHEDULE_ENABLED', false),
     'schedule_interval_minutes' => (int) env('AI_SCHEDULE_INTERVAL_MINUTES', 5),
     'scheduled_batch_size' => (int) env('AI_SCHEDULE_BATCH_SIZE', 3),
+    'manual_run_turns' => max(1, (int) env('AI_MANUAL_RUN_TURNS', 20)),
     'default_turns' => env('AI_DEFAULT_TURNS') === null || env('AI_DEFAULT_TURNS') === ''
         ? null
         : (int) env('AI_DEFAULT_TURNS'),

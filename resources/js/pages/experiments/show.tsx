@@ -49,6 +49,7 @@ type Props = {
     events: VocabularyEvent[];
     cursor: Cursor;
     poll_interval_ms: number;
+    manual_run_turns: number;
 };
 
 type UpdatePayload = {
@@ -400,6 +401,7 @@ export default function ExperimentShow({
     events,
     cursor,
     poll_interval_ms: pollIntervalMs,
+    manual_run_turns: manualRunTurns,
 }: Props) {
     const [currentExperiment, setCurrentExperiment] = useState(experiment);
     const [currentMessages, setCurrentMessages] = useState(messages);
@@ -519,6 +521,7 @@ export default function ExperimentShow({
 
     useEffect(() => {
         const isFinished =
+            currentExperiment.status === 'paused' ||
             currentExperiment.status === 'completed' ||
             currentExperiment.status === 'failed';
 
@@ -788,7 +791,8 @@ export default function ExperimentShow({
                                 History
                             </Button>
 
-                            {(currentExperiment.status === 'failed' ||
+                            {(currentExperiment.status === 'paused' ||
+                                currentExperiment.status === 'failed' ||
                                 (currentExperiment.status === 'pending' &&
                                     currentExperiment.queued_at === null)) && (
                                 <Form
@@ -835,7 +839,9 @@ export default function ExperimentShow({
                                                 {processing
                                                     ? 'Queueing…'
                                                     : currentExperiment.status ===
-                                                        'failed'
+                                                            'failed' ||
+                                                        currentExperiment.status ===
+                                                            'paused'
                                                       ? 'Resume'
                                                       : 'Start'}
                                             </Button>
@@ -923,6 +929,22 @@ export default function ExperimentShow({
                                 {currentExperiment.failure_code}
                             </p>
                         )}
+                    </div>
+                )}
+
+                {currentExperiment.status === 'paused' && (
+                    <div
+                        className="shrink-0 rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950"
+                        role="status"
+                    >
+                        <h2 className="font-semibold text-slate-900 dark:text-slate-100">
+                            Batch complete
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                            Execution paused after up to {manualRunTurns} turns.
+                            Resume when you are ready to authorize the next
+                            batch.
+                        </p>
                     </div>
                 )}
 

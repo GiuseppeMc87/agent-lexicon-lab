@@ -24,7 +24,7 @@ class ExperimentOrchestrator
         private readonly TokenDecoder $decoder,
     ) {}
 
-    public function run(Experiment $experiment): void
+    public function run(Experiment $experiment, ?int $turnLimit = null): void
     {
         if (! $this->begin($experiment)) {
             return;
@@ -34,7 +34,12 @@ class ExperimentOrchestrator
             $experiment->refresh();
             $this->assertProviderMatches($experiment);
 
-            while ($experiment->max_turns === null || $experiment->current_turn < $experiment->max_turns) {
+            $turnsProcessed = 0;
+
+            while (
+                ($experiment->max_turns === null || $experiment->current_turn < $experiment->max_turns)
+                && ($turnLimit === null || $turnsProcessed < $turnLimit)
+            ) {
                 $turn = $experiment->current_turn + 1;
                 $messages = $this->messageHistory($experiment);
                 $visibleVocabulary = $this->vocabulary->activeVocabulary($experiment);
@@ -72,9 +77,12 @@ class ExperimentOrchestrator
 
                 $this->persistTurn($experiment, $turn, $senderResponse, $receiverResponse);
                 $experiment->refresh();
+                $turnsProcessed++;
             }
 
-            $this->complete($experiment);
+            if ($experiment->max_turns !== null && $experiment->current_turn >= $experiment->max_turns) {
+                $this->complete($experiment);
+            }
         } catch (Throwable $exception) {
             $this->fail($experiment, $exception);
 

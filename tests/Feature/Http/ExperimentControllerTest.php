@@ -157,6 +157,7 @@ class ExperimentControllerTest extends TestCase
         $response->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('experiments/show')
             ->where('experiment.id', $experiment->id)
+            ->where('manual_run_turns', 20)
             ->has('messages', 0)
             ->has('vocabulary', 0)
             ->has('events', 0));
@@ -194,7 +195,30 @@ class ExperimentControllerTest extends TestCase
         $this->assertNotNull($experiment->refresh()->queued_at);
         Queue::assertPushed(
             RunExperiment::class,
-            fn (RunExperiment $job): bool => $job->experimentId === $experiment->id,
+            fn (RunExperiment $job): bool => $job->experimentId === $experiment->id
+                && $job->remainingTurns === 20,
+        );
+    }
+
+    public function test_authenticated_owner_can_resume_a_paused_experiment(): void
+    {
+        Queue::fake([RunExperiment::class]);
+        $user = User::factory()->create();
+        $experiment = Experiment::factory()->for($user)->paused()->create([
+            'current_turn' => 12,
+            'max_turns' => null,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('experiments.run', $experiment));
+
+        $response->assertRedirect();
+        $experiment->refresh();
+        $this->assertSame(ExperimentStatus::Pending, $experiment->status);
+        $this->assertNotNull($experiment->queued_at);
+        Queue::assertPushed(
+            RunExperiment::class,
+            fn (RunExperiment $job): bool => $job->experimentId === $experiment->id
+                && $job->remainingTurns === 20,
         );
     }
 

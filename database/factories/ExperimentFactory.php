@@ -40,6 +40,15 @@ class ExperimentFactory extends Factory
         ]);
     }
 
+    public function paused(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => ExperimentStatus::Paused,
+            'started_at' => now()->subMinute(),
+            'queued_at' => null,
+        ]);
+    }
+
     public function completed(): static
     {
         return $this->state(fn (): array => [

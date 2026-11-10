@@ -5,17 +5,18 @@ namespace App\Jobs;
 use App\Enums\ExperimentStatus;
 use App\Models\Experiment;
 use App\Services\ExperimentOrchestrator;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class RunExperiment implements ShouldBeUnique, ShouldQueue
+class RunExperiment implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 1;
+    public int $tries = 4;
 
     public int $timeout = 900;
 
@@ -23,7 +24,10 @@ class RunExperiment implements ShouldBeUnique, ShouldQueue
 
     public int $uniqueFor = 960;
 
-    public function __construct(public readonly int $experimentId) {}
+    public function __construct(
+        public readonly int $experimentId,
+        public readonly int $remainingTurns = 1,
+    ) {}
 
     /**
      * @return list<object>
@@ -32,7 +36,7 @@ class RunExperiment implements ShouldBeUnique, ShouldQueue
     {
         return [
             (new WithoutOverlapping('experiment:'.$this->experimentId))
-                ->dontRelease()
+                ->releaseAfter(30)
                 ->expireAfter(960),
         ];
     }
@@ -49,11 +53,40 @@ class RunExperiment implements ShouldBeUnique, ShouldQueue
     {
         $experiment = Experiment::query()->find($this->experimentId);
 
-        if ($experiment === null) {
+        if (
+            $experiment === null
+            || ! in_array($experiment->status, [ExperimentStatus::Pending, ExperimentStatus::Running], true)
+        ) {
             return;
         }
 
-        $orchestrator->run($experiment);
+        $orchestrator->run($experiment, 1);
+        $experiment->refresh();
+
+        if ($experiment->status !== ExperimentStatus::Running) {
+            return;
+        }
+
+        if ($this->remainingTurns > 1) {
+            self::dispatch($experiment->id, $this->remainingTurns - 1)
+                ->delay(now()->addSecond());
+
+            return;
+        }
+
+        DB::transaction(function () use ($experiment): void {
+            $locked = Experiment::query()->lockForUpdate()->findOrFail($experiment->id);
+
+            if ($locked->status !== ExperimentStatus::Running) {
+                return;
+            }
+
+            $locked->update([
+                'status' => ExperimentStatus::Paused,
+                'queued_at' => null,
+                'lock_version' => $locked->lock_version + 1,
+            ]);
+        });
     }
 
     public function failed(?Throwable $exception): void
