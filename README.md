@@ -59,6 +59,34 @@ Only the experiment owner may view or start an experiment. Start requests have a
 
 Recurring dispatch is disabled by default. To opt in, set `AI_SCHEDULE_ENABLED=true`. The interval and batch size are bounded by `AI_SCHEDULE_INTERVAL_MINUTES` and `AI_SCHEDULE_BATCH_SIZE`.
 
+## Shared semantic-language experiment scope
+
+The long-term research target is not merely to abbreviate English messages. It is to test whether multilingual natural-language content can be converted into a shared, compact semantic language, processed by a smaller reasoning model trained only on that language, and translated back into the user's language.
+
+The intended architecture is:
+
+```text
+natural language -> semantic encoder -> compact semantic language
+                   -> small reasoning model
+compact semantic response -> semantic decoder -> natural language
+```
+
+The encoder and decoder are the only components that need natural-language capability. The central reasoning model should learn the compact language from the beginning; it should not be expected to understand English or another human language directly.
+
+The compact language must be compositional and typed rather than a collection of arbitrary abbreviations. It must represent entities, relationships, actions, time, quantities, negation, certainty, responsibility, and conditions explicitly. Symbol definitions are versioned and must not silently change during an experiment.
+
+An experiment is successful only if it demonstrates all of the following:
+
+- equivalent meaning survives encoding and decoding;
+- the reasoning model can complete the task using only the compact representation;
+- the representation is smaller in actual model tokens, not merely visible characters;
+- the saving remains after counting encoder, decoder, vocabulary/schema, and validation overhead;
+- the result is cheaper or more efficient than direct multilingual processing without unacceptable latency or error increases.
+
+Experiments should begin with narrow, repetitive domains such as maintenance coordination. They must measure semantic fidelity, multilingual parity, token counts, latency, failure rate, and fallback behavior. A symbolic conversation that is shorter on screen but changes a term's meaning is a failure, not a successful compression result.
+
+This scope does not assume that every human meaning can be represented losslessly or that one universal semantic language will replace natural languages. The research question is whether a verified shared representation can reduce total computation for well-defined, repetitive tasks while preserving the decisions and relationships in the source content.
+
 ## Vertex AI
 
 Vertex execution is disabled by default because it can incur charges. Enabling it requires both:
