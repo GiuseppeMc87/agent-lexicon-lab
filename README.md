@@ -61,31 +61,61 @@ Recurring dispatch is disabled by default. To opt in, set `AI_SCHEDULE_ENABLED=t
 
 ## Shared semantic-language experiment scope
 
-The long-term research target is not merely to abbreviate English messages. It is to test whether multilingual natural-language content can be converted into a shared, compact semantic language, processed by a smaller reasoning model trained only on that language, and translated back into the user's language.
+> **Project thesis:** A multilingual semantic compiler and routing system that delegates work to small, jurisdiction- and task-specific reasoning models.
 
-The intended architecture is:
+The long-term research target is not merely to abbreviate English messages or build one narrow model. It is to test whether multilingual natural-language content can be compiled into a shared, compact semantic language and routed to the most appropriate specialist. Each specialist can remain narrow while the complete system becomes broadly capable by adding experts for new domains, jurisdictions, and tasks.
+
+### Proposed architecture
 
 ```text
-natural language -> semantic encoder -> compact semantic language
-                   -> small reasoning model
-compact semantic response -> semantic decoder -> natural language
+user's natural language
+    -> 1. semantic compiler
+    -> compact typed symbols
+    -> 2. domain, jurisdiction, date, task, and risk router
+    -> 3. small specialist model + authoritative versioned knowledge
+    -> typed semantic answer with evidence and confidence
+    -> 4. deterministic target-language renderer
+    -> 5. optional constrained readability model
+    -> user-facing natural language
 ```
 
-The encoder and decoder are the only components that need natural-language capability. The central reasoning model should learn the compact language from the beginning; it should not be expected to understand English or another human language directly.
+1. **Semantic compiler:** The language-specific front end identifies entities, relationships, actions, time, quantities, negation, certainty, responsibility, and conditions, then emits a canonical typed representation. Exact dictionary or `str_replace`-style substitution is a useful fast path only after the intended meaning is known. Raw word replacement alone changes the alphabet but preserves ambiguity, grammar, and word order. Compact symbols should be native tokens in the specialist model's tokenizer; visually short strings are not necessarily token-efficient. Grammar-based interlingua research demonstrates reversible language-specific parsing and generation through shared abstract syntax, particularly in controlled domains. [Grammatical Framework](https://aclanthology.org/2020.cl-2.6/)
+2. **Router:** A typed policy or small routing model selects the domain, jurisdiction, effective date, task, risk level, required sources, and one or more specialists. Deterministic rules should handle known cases; learned routing should handle ambiguous cases with confidence, abstention, and escalation. Routing research shows that model selection can reduce cost, but incorrect routing remains a first-class failure mode. [RouteLLM](https://arxiv.org/abs/2406.18665)
+3. **Specialist:** A small model is trained to reason over the compact language for a bounded domain and jurisdiction. It should retrieve authoritative, versioned sources rather than rely only on memorised law, policy, or procedure, and it should return typed conclusions, supporting evidence, effective dates, and confidence. The specialist does not need to understand every natural language or unrelated domain directly.
+4. **Deterministic renderer:** A grammar- and template-driven decoder converts the typed result into the target language while preserving entities, dates, quantities, conditions, responsibility, legal modality, uncertainty, and citations. It should not reinterpret the specialist's conclusion.
+5. **Constrained readability model:** This optional model improves fluency only. It must not add, remove, or alter claims and should be followed by a semantic consistency check. Where deterministic rendering is sufficiently natural, this stage should be omitted to reduce cost and risk.
 
-The compact language must be compositional and typed rather than a collection of arbitrary abbreviations. It must represent entities, relationships, actions, time, quantities, negation, certainty, responsibility, and conditions explicitly. Symbol definitions are versioned and must not silently change during an experiment.
+The encoders and renderers are the only components that require natural-language capability. Specialist reasoning models should learn the compact language from the beginning. The compact language must be compositional and typed rather than a collection of arbitrary abbreviations, and symbol definitions must be immutable within a version.
+
+### Why this could outperform one enormous model
+
+One general model spends capacity learning every supported language, domain, jurisdiction, writing style, and unrelated body of knowledge. This architecture attempts to separate shared language handling from specialist reasoning and activate only the capability needed for the current request.
+
+- **Specialisation can improve data and compute efficiency:** Branch-Train-Merge independently trained experts for domains including legal and scientific text. Its 64-domain, 22.4-billion-parameter aggregate matched a conventional Transformer trained with 2.5 times more compute, and the reported gains depended on genuine domain specialisation rather than random data splits. [Branch-Train-Merge](https://arxiv.org/abs/2208.03306)
+- **Task routing can produce smaller deployable networks:** Google's Task-level Mixture-of-Experts extracted per-task subnetworks instead of serving every expert for every request. In multilingual translation experiments it reported 1.9 times greater peak throughput across 30 language pairs and 2.6 times greater throughput at 200 language pairs while remaining competitive with token-level expert routing. [Task-level Mixture-of-Experts](https://research.google/pubs/beyond-distillation-task-level-mixture-of-experts-for-efficient-inference/)
+- **External routing can avoid unnecessary premium-model calls:** RouteLLM and FrugalGPT demonstrate that learned routing or cascades can choose between models according to task difficulty and cost. FrugalGPT reported matching its strongest individual model with substantially lower cost in its evaluated workloads, although those savings are benchmark- and pricing-dependent and must not be assumed for this project. [RouteLLM](https://arxiv.org/abs/2406.18665), [FrugalGPT](https://arxiv.org/abs/2305.05176)
+- **Jurisdictional separation can reduce irrelevant legal interference:** A model serving an England-and-Wales lawyer does not need every foreign legal system active for each query. However, narrower training does not itself guarantee truth. Research found large variations in legal-model performance across jurisdictions, courts, time periods, and cases, so authoritative retrieval, citations, effective dates, abstention, and professional review remain necessary. [Large Legal Fictions](https://arxiv.org/abs/2401.01301)
+- **Small experts may be deployable near the user:** Bounded specialist models are better candidates for customer-controlled or low-resource hardware, reducing network dependence and exposure of sensitive inputs. Whether a particular expert fits and performs adequately must be demonstrated on the target device, not inferred from parameter count alone. [MobileLLM](https://arxiv.org/abs/2402.14905)
+- **Experts can be updated independently:** A changed statute, medical protocol, or operational policy can update the relevant knowledge store or expert without retraining every language and unrelated domain. This is a proposed lifecycle advantage; experiments must measure update cost, compatibility, and regression risk.
+- **A shared semantic layer can remove repeated surface variation:** Multiple languages and phrasings can map to one operational meaning, allowing specialist training to focus on decisions and relationships rather than repeatedly learning every linguistic expression. The saving exists only if semantic compilation preserves the required meaning and the encoder, renderer, validation, and routing costs do not consume it.
+
+The comparison is therefore not “small model versus large model” in isolation. It is the complete routed system versus a strong general-model baseline on accuracy, hallucination rate, tokens, training compute, inference cost, latency, memory, energy, update cost, and failure handling.
+
+### Experiment success criteria
 
 An experiment is successful only if it demonstrates all of the following:
 
 - equivalent meaning survives encoding and decoding;
-- the reasoning model can complete the task using only the compact representation;
+- the router selects the correct domain, jurisdiction, effective date, task, and specialist, or safely abstains;
+- the specialist can complete the task using only the compact representation and authorised knowledge sources;
+- the semantic answer retains evidence, provenance, uncertainty, and applicable dates;
 - the representation is smaller in actual model tokens, not merely visible characters;
-- the saving remains after counting encoder, decoder, vocabulary/schema, and validation overhead;
+- the saving remains after counting compiler, router, specialist, renderer, optional readability model, vocabulary/schema, retrieval, validation, and fallback overhead;
 - the result is cheaper or more efficient than direct multilingual processing without unacceptable latency or error increases.
 
-Experiments should begin with narrow, repetitive domains such as maintenance coordination. They must measure semantic fidelity, multilingual parity, token counts, latency, failure rate, and fallback behavior. A symbolic conversation that is shorter on screen but changes a term's meaning is a failure, not a successful compression result.
+Experiments should begin with controlled, repetitive domains such as maintenance coordination before testing regulated domains. They must measure semantic fidelity, multilingual parity, routing accuracy, source-grounded task accuracy, token counts, latency, failure rate, and fallback behaviour. A symbolic conversation that is shorter on screen but changes a term's meaning is a failure, not a successful compression result.
 
-This scope does not assume that every human meaning can be represented losslessly or that one universal semantic language will replace natural languages. The research question is whether a verified shared representation can reduce total computation for well-defined, repetitive tasks while preserving the decisions and relationships in the source content.
+This scope does not assume that every human meaning can be represented losslessly or that one universal semantic language will replace natural languages. The research question is whether a verified shared representation and routed specialist system can deliver broader practical coverage through a collection of narrow experts while using less total computation and preserving the decisions and relationships in the source content.
 
 ### Potential commercial value
 
