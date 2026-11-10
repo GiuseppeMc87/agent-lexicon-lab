@@ -87,6 +87,22 @@ Experiments should begin with narrow, repetitive domains such as maintenance coo
 
 This scope does not assume that every human meaning can be represented losslessly or that one universal semantic language will replace natural languages. The research question is whether a verified shared representation can reduce total computation for well-defined, repetitive tasks while preserving the decisions and relationships in the source content.
 
+### Potential commercial value
+
+If the approach achieves verified semantic fidelity and lower end-to-end cost, its strongest commercial opportunity is specialised AI infrastructure rather than a universal replacement for large language models. Potential benefits include:
+
+- lower inference cost and GPU demand for high-volume repetitive workflows;
+- lower latency and easier private or on-premise deployment;
+- one domain reasoning model serving multiple languages through shared encoders and decoders;
+- more consistent and auditable decisions about approvals, deadlines, responsibility, and workflow state;
+- smaller multilingual models for domains such as maintenance, insurance claims, logistics, finance operations, legal intake, and customer support;
+- reduced cost when training one compact domain model instead of separate large models for each language;
+- licensing opportunities for the semantic language, encoders, decoders, domain ontologies, validators, and reasoning models.
+
+The likely product is a multilingual semantic-computing platform: business communication is converted into a typed intermediate language, processed by a small domain model, checked for fidelity and contradictions, and returned in the user's language. The first commercial claim should remain narrow and measurable: for defined multilingual workflows, reduce total inference cost while preserving task meaning and auditability.
+
+Commercial validation must include the full pipeline cost, translation and validation errors, latency, privacy requirements, and infrastructure-level energy measurements. Shorter prompts alone are not a commercial result. The strongest first proof of value is a repetitive, expensive workflow with a controlled vocabulary and explicit decisions, such as insurance claims, maintenance coordination, invoice processing, or logistics operations.
+
 ## Vertex AI
 
 Vertex execution is disabled by default because it can incur charges. Enabling it requires both:
