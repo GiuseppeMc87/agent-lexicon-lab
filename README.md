@@ -488,7 +488,3 @@ The source repository's tracked working tree and index remained clean. Its refs,
 
 The repository must remain private until these blockers are resolved and the public-readiness review is repeated from the final independent clone.
 
-### Test account
-
-email: giuseppemuci87@gmail.com
-password: YUNTJ5b4wS@
