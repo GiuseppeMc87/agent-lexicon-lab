@@ -89,19 +89,35 @@ This scope does not assume that every human meaning can be represented losslessl
 
 ### Potential commercial value
 
-If the approach achieves verified semantic fidelity and lower end-to-end cost, its strongest commercial opportunity is specialised AI infrastructure rather than a universal replacement for large language models. Potential benefits include:
+If the approach achieves verified semantic fidelity and lower end-to-end cost, its strongest commercial opportunity is specialised AI infrastructure rather than a universal replacement for large language models.
 
-- lower inference cost and GPU demand for high-volume repetitive workflows;
-- lower latency and easier private or on-premise deployment;
-- one domain reasoning model serving multiple languages through shared encoders and decoders;
-- more consistent and auditable decisions about approvals, deadlines, responsibility, and workflow state;
-- smaller multilingual models for domains such as maintenance, insurance claims, logistics, finance operations, legal intake, and customer support;
-- reduced cost when training one compact domain model instead of separate large models for each language;
-- licensing opportunities for the semantic language, encoders, decoders, domain ontologies, validators, and reasoning models.
+#### Potential benefits and the conditions behind them
 
-The likely product is a multilingual semantic-computing platform: business communication is converted into a typed intermediate language, processed by a small domain model, checked for fidelity and contradictions, and returned in the user's language. The first commercial claim should remain narrow and measurable: for defined multilingual workflows, reduce total inference cost while preserving task meaning and auditability.
+- **Lower inference cost and GPU demand:** A smaller reasoning model and shorter effective context could reduce serving cost for high-volume repetitive workflows. This is a hypothesis to prove, not a consequence of shorter text alone: energy and latency depend on model size, sequence length, batching, quantisation, hardware, and serving strategy. [Energy Considerations of Large Language Model Inference](https://arxiv.org/abs/2504.17674) reports that system-level optimisation can materially change energy use, so this project must benchmark the complete stack.
+- **Lower latency:** Fewer reasoning tokens and a smaller model may reduce prefill and decode time. The encoder, decoder, validation, and queueing overhead could offset that gain, so latency must be measured end to end at realistic concurrency.
+- **Private and on-premise deployment:** A compact domain model may fit more easily on customer-controlled infrastructure, reducing data transfer and cloud dependence. This is commercially valuable for hospitals, councils, financial services, and regulated organisations, but it does not remove the need to secure and update the encoder and decoder.
+- **One reasoning model for multiple languages:** Shared semantic representations could allow one domain model to serve several languages through language-specific adapters or encoders. Related multilingual research has demonstrated shared representation spaces and parameter reuse across many languages, but this project must prove parity for its own semantic language rather than assume it. [Google Universal Speech Model](https://arxiv.org/abs/2303.01037)
+- **More consistent and auditable business decisions:** Typed entities, relationships, obligations, deadlines, and workflow states can make decisions easier to inspect than unconstrained prose. This benefit depends on schema validation, immutable vocabulary versions, provenance, and tests for negation, uncertainty, and responsibility; a compact code without those controls is not auditable.
+- **Domain-specific products:** The strongest initial markets are repetitive workflows with controlled vocabularies and explicit decisions: maintenance coordination, insurance claims, logistics, invoice processing, finance operations, legal intake, and customer support. These domains provide measurable success criteria and repeated concepts; open-ended conversation is a weaker first market.
+- **Reduced model-training cost:** One compact domain model could replace several separately trained language-specific task models. This saving must include encoder/decoder training, parallel or translated data, ontology maintenance, retraining after schema changes, and multilingual quality evaluation. Distillation and pruning already provide independent routes to smaller models, so the semantic layer must outperform those baselines rather than receive credit for model compression alone. [Compact Language Models via Pruning and Knowledge Distillation](https://arxiv.org/abs/2407.14679)
+- **Licensing and platform revenue:** The licensable assets could include the semantic-language specification, encoders and decoders, domain ontologies, validators, evaluation suites, and compact reasoning models. A defensible product would sell measurable workflow outcomes and deployment controls, not merely a list of abbreviations.
+- **Infrastructure savings for AI providers:** If independent tests show lower total cost per successful task, providers could use the architecture to improve margins or offer cheaper plans. This claim requires production-like measurements and comparison with strong baselines including ordinary multilingual models, better tokenisers, caching, batching, quantisation, distillation, and semantic deduplication. [Deduplicating Training Data Makes Language Models Better](https://arxiv.org/abs/2107.06499)
 
-Commercial validation must include the full pipeline cost, translation and validation errors, latency, privacy requirements, and infrastructure-level energy measurements. Shorter prompts alone are not a commercial result. The strongest first proof of value is a repetitive, expensive workflow with a controlled vocabulary and explicit decisions, such as insurance claims, maintenance coordination, invoice processing, or logistics operations.
+#### Commercial validation requirements
+
+The likely product is a multilingual semantic-computing platform: business communication is converted into a typed intermediate language, processed by a small domain model, checked for fidelity and contradictions, and returned in the user's language. The first commercial claim should remain narrow and measurable:
+
+> For defined multilingual workflows, reduce total inference cost while preserving task meaning, operational accuracy, privacy, and auditability.
+
+Validation must compare the full pipeline against direct multilingual processing and report:
+
+- tokens, latency, memory, GPU utilisation, and energy per successful task;
+- encoder, reasoning, decoder, vocabulary/schema, validation, and fallback costs;
+- semantic fidelity, multilingual parity, task accuracy, and high-risk error rates;
+- model-update, ontology-versioning, monitoring, and support costs;
+- whether the system remains useful when the input is ambiguous or outside the domain.
+
+Shorter prompts or visible abbreviations alone are not a commercial result. The strongest first proof of value is a repetitive, expensive workflow with a controlled vocabulary and explicit decisions. Smaller models are not automatically better reasoners: recent distillation work finds that reasoning capability can be difficult to transfer to small models, so each domain must be evaluated rather than assumed to benefit. [Small Models Struggle to Learn from Strong Reasoners](https://arxiv.org/abs/2502.12143)
 
 ## Vertex AI
 
